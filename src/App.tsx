@@ -23,7 +23,7 @@ function App(){
  const [charges,setCharges]=useState(categories.map(name=>({name,enabled:false,value:''})));
  const [buildingAddress,setBuildingAddress]=useState('ΣΑΜΟΥ 4 ΜΑΡΟΥΣΙ');
  const [allocationMethod,setAllocationMethod]=useState<'equal'|'shares'>('equal');
- const [residentNames,setResidentNames]=useState<Record<string,string>>({});
+ const [residentNames,setResidentNames]=useState<Record<string,string>>({'A1':'ΕΛΕΝΗ','A2':'ΜΠΙΤΑ ΚΩΝ/ΝΑ','A3':'ΣΤΑΘΟΠΟΥΛΟΣ','B1':'ΣΕΡΑΦΕΙΜ','B2':'ΚΩΝΣΤΑΝΤΙΝΑ ΜΑΡΙΑ','B3':'ΜΠΙΤΑΣ ΓΡΗΓΟΡΗΣ'});
  const [paymentApartment,setPaymentApartment]=useState('A1');
  const [paymentKind,setPaymentKind]=useState<'common'|'heating'>('common');
  const [paymentAmount,setPaymentAmount]=useState('');
