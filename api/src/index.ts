@@ -77,9 +77,10 @@ export default {
     const ps=(await env.DB.prepare('SELECT p.id,a.code AS apartment_code,p.kind,p.amount_cents,p.paid_on FROM payments p JOIN apartments a ON a.id=p.apartment_id ORDER BY p.paid_on DESC,p.created_at DESC LIMIT 500').all<{id:string;apartment_code:string;kind:string;amount_cents:number;paid_on:string}>()).results;
     const rs=(await env.DB.prepare('SELECT r.id,a.code AS apartment_code,r.reading,r.measured_on FROM heating_readings r JOIN apartments a ON a.id=r.apartment_id ORDER BY r.measured_on DESC,a.code LIMIT 500').all<{id:string;apartment_code:string;reading:number;measured_on:string}>()).results;
     const tank=await env.DB.prepare('SELECT measured_on,centimeters FROM tank_measurements ORDER BY measured_on DESC LIMIT 1').first<{measured_on:string;centimeters:number}>();
+    const tank_history=(await env.DB.prepare('SELECT id,measured_on,centimeters FROM tank_measurements ORDER BY measured_on DESC LIMIT 100').all<{id:string;measured_on:string;centimeters:number}>()).results;
     const fuel_deliveries=user.role==='admin'?(await env.DB.prepare('SELECT id,delivered_on,liters,cost_cents,note FROM fuel_deliveries ORDER BY delivered_on DESC LIMIT 500').all()).results:[];
     const accessible=new Set(a.filter(x=>!own||own.includes(x.id)).map(x=>x.code));
-    return response(req,env,{role:user.role,email:user.email,my_apartments:[...accessible],apartments:a.filter(x=>accessible.has(x.code)),expenses:user.role==='admin'?es:[],fuel_deliveries,payments:ps.filter(x=>accessible.has(x.apartment_code)),readings:rs.filter(x=>accessible.has(x.apartment_code)),tank});
+    return response(req,env,{role:user.role,email:user.email,my_apartments:[...accessible],apartments:a.filter(x=>accessible.has(x.code)),expenses:user.role==='admin'?es:[],fuel_deliveries,payments:ps.filter(x=>accessible.has(x.apartment_code)),readings:rs.filter(x=>accessible.has(x.apartment_code)),tank,tank_history});
    }
    if(path==='/api/statements'&&method==='GET'){
     const rows=(await env.DB.prepare('SELECT month,address,method,items_json,names_json,created_at,updated_at FROM monthly_statements ORDER BY month DESC').all()).results;
@@ -89,6 +90,11 @@ export default {
     if(user.role!=='admin')return fail(req,env,'Δεν επιτρέπεται.',403);
     const rows=(await env.DB.prepare('SELECT month,created_at,actor_id,old_json,new_json FROM statement_revisions ORDER BY created_at DESC LIMIT 100').all()).results;
     return response(req,env,{revisions:rows});
+   }
+   if(path==='/api/audit'&&method==='GET'){
+    if(user.role!=='admin')return fail(req,env,'Δεν επιτρέπεται.',403);
+    const events=(await env.DB.prepare('SELECT id,action,entity_type,entity_id,details,created_at FROM audit_events ORDER BY created_at DESC LIMIT 250').all()).results;
+    return response(req,env,{events:events.map((x:any)=>({...x,details:JSON.parse(x.details)}))});
    }
    if(user.role!=='admin')return fail(req,env,'Δεν έχετε δικαίωμα καταχώρισης.',403);
    if(path==='/api/statements'&&method==='POST'){
