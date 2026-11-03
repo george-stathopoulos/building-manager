@@ -132,6 +132,34 @@ export default {
     if(!a)return fail(req,env,'Άγνωστο διαμέρισμα.');
     const id=uuid();await env.DB.batch([env.DB.prepare('INSERT INTO payments(id,apartment_id,kind,amount_cents,paid_on,created_by,created_at) VALUES(?,?,?,?,?,?,?)').bind(id,a.id,b.kind,b.amount_cents,b.paid_on,user.id,iso()),audit(env,user.id,'payment_created','payment',id,{apartment_code:b.apartment_code,amount_cents:b.amount_cents,kind:b.kind})]);return response(req,env,{id},201);
    }
+   if(path==='/api/readings/update'&&method==='POST'){
+    const b=await jsonBody(req);
+    if(!validDate(b.original_date)||!validDate(b.measured_on)||typeof b.centimeters!=='number'||!Number.isFinite(b.centimeters)||b.centimeters<0||b.centimeters>10000||!Array.isArray(b.readings))return fail(req,env,'Ελέγξτε την ημερομηνία και τις μετρήσεις.');
+    const apartments=(await env.DB.prepare('SELECT id,code FROM apartments ORDER BY code').all<{id:string;code:string}>()).results;
+    const readings=b.readings as Array<{apartment_code:string;reading:number}>;
+    if(readings.length!==apartments.length||new Set(readings.map(x=>x.apartment_code)).size!==apartments.length||readings.some(x=>!apartments.some(a=>a.code===x.apartment_code)||!Number.isSafeInteger(x.reading)||x.reading<0))return fail(req,env,'Απαιτούνται έγκυρες μετρήσεις για όλα τα διαμερίσματα.');
+    const original=await env.DB.prepare('SELECT id,centimeters,measured_on FROM tank_measurements WHERE measured_on=?').bind(b.original_date).first<{id:string;centimeters:number;measured_on:string}>();
+    if(!original)return fail(req,env,'Η μέτρηση προς διόρθωση δεν βρέθηκε.',404);
+    if(b.measured_on!==b.original_date){
+     const collision=await env.DB.prepare('SELECT id FROM tank_measurements WHERE measured_on=?').bind(b.measured_on).first();
+     if(collision)return fail(req,env,'Υπάρχει ήδη μέτρηση στη νέα ημερομηνία.',409);
+    }
+    const before=(await env.DB.prepare('SELECT a.code AS apartment_code,r.reading FROM heating_readings r JOIN apartments a ON a.id=r.apartment_id WHERE r.measured_on=? ORDER BY a.code').bind(b.original_date).all()).results;
+    const queries:D1PreparedStatement[]=[];
+    for(const a of apartments){
+     const item=readings.find(x=>x.apartment_code===a.code)!;
+     const previous=await env.DB.prepare('SELECT reading FROM heating_readings WHERE apartment_id=? AND measured_on<? AND measured_on<>? ORDER BY measured_on DESC LIMIT 1').bind(a.id,b.measured_on,b.original_date).first<{reading:number}>();
+     const next=await env.DB.prepare('SELECT reading FROM heating_readings WHERE apartment_id=? AND measured_on>? AND measured_on<>? ORDER BY measured_on ASC LIMIT 1').bind(a.id,b.measured_on,b.original_date).first<{reading:number}>();
+     if((previous&&item.reading<previous.reading)||(next&&item.reading>next.reading))return fail(req,env,'Η νέα ένδειξη '+a.code+' δεν συμφωνεί με την προηγούμενη/επόμενη μέτρηση.',409);
+     const old=(before as Array<{apartment_code:string;reading:number}>).find(x=>x.apartment_code===a.code);
+     if(!old)return fail(req,env,'Απουσιάζει η αρχική μέτρηση '+a.code+'.',409);
+     queries.push(env.DB.prepare('UPDATE heating_readings SET measured_on=?,reading=? WHERE apartment_id=? AND measured_on=?').bind(b.measured_on,item.reading,a.id,b.original_date));
+    }
+    queries.unshift(env.DB.prepare('UPDATE tank_measurements SET measured_on=?,centimeters=? WHERE id=?').bind(b.measured_on,b.centimeters,original.id));
+    queries.push(audit(env,user.id,'heating_readings_updated','tank_measurement',original.id,{before:{...original,readings:before},after:{measured_on:b.measured_on,centimeters:b.centimeters,readings}}));
+    await env.DB.batch(queries);
+    return response(req,env,{ok:true,updated:true});
+   }
    if(path==='/api/readings'&&method==='POST'){
     const b=await jsonBody(req);if(!validDate(b.measured_on)||typeof b.centimeters!=='number'||!Number.isFinite(b.centimeters)||b.centimeters<0||b.centimeters>10000||!Array.isArray(b.readings))return fail(req,env,'Ελέγξτε τις μετρήσεις.');
     const apartments=(await env.DB.prepare('SELECT id,code FROM apartments ORDER BY code').all<{id:string;code:string}>()).results;
