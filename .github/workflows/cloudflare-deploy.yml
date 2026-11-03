@@ -18,6 +18,7 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
+      ADMIN_SETUP_KEY_PRESENT: ${{ secrets.ADMIN_SETUP_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -57,12 +58,8 @@ jobs:
         run: npx wrangler d1 migrations apply building-manager-db --remote
       - name: Δημοσίευση API
         run: npx wrangler deploy
-      - name: Καταχώριση διεύθυνσης API
-        shell: bash
-        run: |
-          set -euo pipefail
-          SUBDOMAIN=$(node -e '(async()=>{const r=await fetch("https://api.cloudflare.com/client/v4/accounts/"+process.env.CLOUDFLARE_ACCOUNT_ID+"/workers/subdomain",{headers:{Authorization:"Bearer "+process.env.CLOUDFLARE_API_TOKEN}});const j=await r.json();if(!j.success||!j.result?.subdomain)process.exit(1);console.log(j.result.subdomain)})().catch(()=>process.exit(1))')
-          URL="https://building-manager-api.${SUBDOMAIN}.workers.dev"
-          echo "Worker deployed: $URL"
-          gh api --method PATCH "repos/$GH_REPO/actions/variables/VITE_API_URL" -f value="$URL" >/dev/null || gh api --method POST "repos/$GH_REPO/actions/variables" -f name="VITE_API_URL" -f value="$URL" >/dev/null
-          echo "Frontend API URL configured."
+      - name: Εγκατάσταση μυστικού αρχικής ρύθμισης
+        if: ${{ env.ADMIN_SETUP_KEY_PRESENT == 'true' }}
+        env:
+          ADMIN_SETUP_KEY: ${{ secrets.ADMIN_SETUP_KEY }}
+        run: printf '%s' "$ADMIN_SETUP_KEY" | npx wrangler secret put ADMIN_SETUP_KEY
