@@ -91,6 +91,22 @@ export default {
     return response(req,env,{revisions:rows});
    }
    if(user.role!=='admin')return fail(req,env,'Δεν έχετε δικαίωμα καταχώρισης.',403);
+   if(path==='/api/statements'&&method==='POST'){
+    const b=await jsonBody(req);
+    if(!validMonth(b.month)||typeof b.address!=='string'||b.address.length>200||!['equal','shares'].includes(String(b.method))||!Array.isArray(b.items)||b.items.length>40||!b.items.length||!b.names||typeof b.names!=='object'||Array.isArray(b.names))return fail(req,env,'Ελέγξτε την κατάσταση κοινοχρήστων.');
+    const items=b.items as Array<{name:string;amount_cents:number}>;
+    if(items.some(x=>typeof x.name!=='string'||!x.name.trim()||x.name.length>120||!cents(x.amount_cents)))return fail(req,env,'Μη έγκυρες δαπάνες.');
+    const names=b.names as Record<string,unknown>;
+    if(Object.entries(names).some(([k,v])=>!['A1','A2','A3','B1','B2','B3'].includes(k)||typeof v!=='string'||v.length>100))return fail(req,env,'Μη έγκυρα ονόματα.');
+    const old=await env.DB.prepare('SELECT * FROM monthly_statements WHERE month=?').bind(b.month).first();
+    const timestamp=iso(),newData={month:b.month,address:b.address,method:b.method,items,names};
+    await env.DB.batch([
+      env.DB.prepare('INSERT INTO monthly_statements(month,address,method,items_json,names_json,updated_by,created_at,updated_at) VALUES(?,?,?,?,?,?,?,?) ON CONFLICT(month) DO UPDATE SET address=excluded.address,method=excluded.method,items_json=excluded.items_json,names_json=excluded.names_json,updated_by=excluded.updated_by,updated_at=excluded.updated_at').bind(b.month,b.address,b.method,JSON.stringify(items),JSON.stringify(names),user.id,timestamp,timestamp),
+      env.DB.prepare('INSERT INTO statement_revisions(id,month,old_json,new_json,actor_id,created_at) VALUES(?,?,?,?,?,?)').bind(uuid(),b.month,old?JSON.stringify(old):null,JSON.stringify(newData),user.id,timestamp),
+      audit(env,user.id,old?'statement_updated':'statement_created','statement',String(b.month),{total_cents:items.reduce((a,x)=>a+x.amount_cents,0)})
+    ]);
+    return response(req,env,{ok:true,updated:Boolean(old)});
+   }
    if(path==='/api/expenses'&&method==='POST'){
     const b=await jsonBody(req),category=String(b.category||'');
     if(!validMonth(b.month)||!cents(b.amount_cents)||!['equal','shares'].includes(String(b.method))||category.length>80||category.length<1||typeof b.description!=='string'&&b.description!==undefined||String(b.description||'').length>300)return fail(req,env,'Ελέγξτε τα στοιχεία της δαπάνης.');
