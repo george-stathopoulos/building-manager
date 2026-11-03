@@ -192,6 +192,18 @@ export default {
     statements.push(audit(env,user.id,'heating_readings_created','tank_measurement',tankId,{measured_on:b.measured_on,centimeters:b.centimeters}));
     await env.DB.batch(statements);return response(req,env,{ok:true},201);
    }
+   if(path==='/api/fuel-deliveries/update'&&method==='POST'){
+    const b=await jsonBody(req);
+    if(typeof b.id!=='string'||b.id.length>100||!validDate(b.delivered_on)||typeof b.liters!=='number'||!Number.isFinite(b.liters)||b.liters<=0||!cents(b.cost_cents)||typeof b.note!=='string'||b.note.length>500)return fail(req,env,'Ελέγξτε τα στοιχεία του ανεφοδιασμού.');
+    const before=await env.DB.prepare('SELECT id,delivered_on,liters,cost_cents,note FROM fuel_deliveries WHERE id=?').bind(b.id).first();
+    if(!before)return fail(req,env,'Ο ανεφοδιασμός δεν βρέθηκε.',404);
+    const after={delivered_on:b.delivered_on,liters:b.liters,cost_cents:b.cost_cents,note:b.note};
+    await env.DB.batch([
+      env.DB.prepare('UPDATE fuel_deliveries SET delivered_on=?,liters=?,cost_cents=?,note=? WHERE id=?').bind(b.delivered_on,b.liters,b.cost_cents,b.note,b.id),
+      audit(env,user.id,'fuel_delivery_updated','fuel_delivery',b.id,{before,after})
+    ]);
+    return response(req,env,{ok:true,updated:true});
+   }
    if(path==='/api/fuel-deliveries'&&method==='POST'){
     const b=await jsonBody(req);if(!validDate(b.delivered_on)||typeof b.liters!=='number'||!Number.isFinite(b.liters)||b.liters<=0||!cents(b.cost_cents)||String(b.note||'').length>500)return fail(req,env,'Ελέγξτε τα στοιχεία παράδοσης πετρελαίου.');
     const id=uuid();await env.DB.batch([env.DB.prepare('INSERT INTO fuel_deliveries(id,delivered_on,liters,cost_cents,note,created_by,created_at) VALUES(?,?,?,?,?,?,?)').bind(id,b.delivered_on,b.liters,b.cost_cents,String(b.note||''),user.id,iso()),audit(env,user.id,'fuel_delivery_created','fuel_delivery',id)]);return response(req,env,{id},201);
