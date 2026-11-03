@@ -4,7 +4,7 @@ export type Payment = {id:string;apartment_code:string;kind:'common'|'heating';a
 export type HeatingReading = {id:string;apartment_code:string;reading:number;measured_on:string};
 export type FuelDelivery = {id:string;delivered_on:string;liters:number;cost_cents:number;note:string};
 export type Overview = {fuel_deliveries:FuelDelivery[];apartments:Apartment[];expenses:Expense[];payments:Payment[];readings:HeatingReading[];tank:{measured_on:string;centimeters:number}|null;role:'admin'|'resident';email:string;my_apartments:string[]};
-const origin=(import.meta.env.VITE_API_URL as string|undefined)?.replace(/\/$/,'') ?? '';
+const origin=(import.meta.env.VITE_API_URL as string|undefined)?.replace(/\/$/,'') ?? 'https://building-manager-api.george-stathopoulos.workers.dev';
 let token=sessionStorage.getItem('building_manager_token')||'';
 export const configured=Boolean(origin);
 export function authenticated(){return Boolean(token);}
