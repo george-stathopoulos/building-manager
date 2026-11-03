@@ -29,10 +29,16 @@ function App(){
  const [selectedPaymentMonth,setSelectedPaymentMonth]=useState('');
  const [statementPayments,setStatementPayments]=useState<Array<{apartment_code:string;due_cents:number;paid_cents:number;balance_cents:number;paid_on:string|null;status:'paid'|'partial'|'unpaid'}>>([]);
  const [paymentBusy,setPaymentBusy]=useState<string|null>(null);
- async function loadStatementPayments(m:string){if(!m){setStatementPayments([]);return;}try{const result=await request<{apartments:typeof statementPayments}>('/statements/payments?month='+encodeURIComponent(m));setStatementPayments(result.apartments);}catch(e){setStatus((e as Error).message);}}
- async function toggleStatementPayment(apartment_code:string,paid:boolean){if(!selectedPaymentMonth)return;setPaymentBusy(apartment_code);setStatus('');try{await request('/statements/payments',{method:'POST',body:JSON.stringify({month:selectedPaymentMonth,apartment_code,paid})});await loadStatementPayments(selectedPaymentMonth);}catch(e){setStatus((e as Error).message);}finally{setPaymentBusy(null);}}
+ type MonthSummary={month:string;due_cents:number;paid_cents:number;balance_cents:number;paid_count:number;apartment_count:number;apartments:Array<{apartment_code:string;due_cents:number;paid_cents:number;balance_cents:number;paid:boolean;paid_on:string|null}>};
+ const [paymentSummaries,setPaymentSummaries]=useState<MonthSummary[]>([]);
+ const [selectedApartments,setSelectedApartments]=useState<string[]>([]);
+ async function loadPaymentSummaries(){try{const r=await request<{months:MonthSummary[]}>('/statements/summary');setPaymentSummaries(r.months);}catch(e){setStatus((e as Error).message);}}
+ async function bulkPayment(paid:boolean){if(!selectedPaymentMonth||!selectedApartments.length)return;setPaymentBusy('bulk');setStatus('');try{await request('/statements/payments/batch',{method:'POST',body:JSON.stringify({month:selectedPaymentMonth,apartment_codes:selectedApartments,paid})});setSelectedApartments([]);await Promise.all([loadStatementPayments(selectedPaymentMonth),loadPaymentSummaries()]);}catch(e){setStatus((e as Error).message);}finally{setPaymentBusy(null);}}
 
- async function loadStatements(){try{const r=await request<{statements:typeof savedStatements}>('/statements');setSavedStatements(r.statements);setSelectedPaymentMonth(m=>m||r.statements[0]?.month||'');}catch(e){setStatementStatus((e as Error).message);}}
+ async function loadStatementPayments(m:string){if(!m){setStatementPayments([]);return;}try{const result=await request<{apartments:typeof statementPayments}>('/statements/payments?month='+encodeURIComponent(m));setStatementPayments(result.apartments);}catch(e){setStatus((e as Error).message);}}
+ async function toggleStatementPayment(apartment_code:string,paid:boolean){if(!selectedPaymentMonth)return;setPaymentBusy(apartment_code);setStatus('');try{await request('/statements/payments',{method:'POST',body:JSON.stringify({month:selectedPaymentMonth,apartment_code,paid})});await Promise.all([loadStatementPayments(selectedPaymentMonth),loadPaymentSummaries()]);}catch(e){setStatus((e as Error).message);}finally{setPaymentBusy(null);}}
+
+ async function loadStatements(){try{const r=await request<{statements:typeof savedStatements}>('/statements');setSavedStatements(r.statements);setSelectedPaymentMonth(m=>r.statements.some(x=>x.month===m)?m:r.statements[0]?.month||'');}catch(e){setStatementStatus((e as Error).message);}}
  function openStatement(m:string){const x=savedStatements.find(x=>x.month===m);if(!x)return;setMonth(x.month);setBuildingAddress(x.address);setAllocationMethod(x.method);setResidentNames(x.names);setCharges(x.items.map(c=>({name:c.name,enabled:true,value:String(c.amount_cents/100)})));setTab('expenses');setStatementStatus('Φορτώθηκε η αποθηκευμένη κατάσταση. Μπορείτε να τη διορθώσετε και να την αποθηκεύσετε ξανά.');}
  const [paymentApartment,setPaymentApartment]=useState('A1');
  const [paymentKind,setPaymentKind]=useState<'common'|'heating'>('common');
@@ -58,7 +64,7 @@ function App(){
  const [inviteEmail,setInviteEmail]=useState('');
  const [inviteApartment,setInviteApartment]=useState('A1');
  const [residentPassword,setResidentPassword]=useState('');
- async function refresh(){try{const x=await request<Overview>('/overview');setData(x);setStatus('');await loadStatements();if(x.role==='admin')await loadAudit();}catch(e){setStatus((e as Error).message);}}
+ async function refresh(){try{const x=await request<Overview>('/overview');setData(x);setStatus('');await Promise.all([loadStatements(),loadPaymentSummaries()]);if(x.role==='admin')await loadAudit();}catch(e){setStatus((e as Error).message);}}
  useEffect(()=>{if(!configured)return;request<{configured:boolean}>('/bootstrap/status').then(r=>setIsConfigured(r.configured)).catch(()=>setIsConfigured(null));if(authenticated())refresh();},[]);
  useEffect(()=>{if(authenticated()&&selectedPaymentMonth)loadStatementPayments(selectedPaymentMonth);},[selectedPaymentMonth]);
  async function doAuth(e:FormEvent){e.preventDefault();setLoading(true);setStatus('');try{
@@ -72,6 +78,8 @@ function App(){
  const paid=data?.payments.filter(p=>p.kind==='common').reduce((s,p)=>s+p.amount_cents,0)||0;
  return {expenses,paid};
  },[data]);
+ const latestSummary=paymentSummaries[0];
+ const outstandingTotal=paymentSummaries.reduce((n,x)=>n+x.balance_cents,0);
  const allApartments=data?.apartments||demo.apartments;
  const isAdmin=data?.role==='admin';
  if(configured&&!data)return <main className="auth-page"><section className="auth-card">
@@ -97,6 +105,7 @@ function App(){
  {status&&<div className="error" role="alert">{status}</div>}
  {tab==='home'&&<><div className="welcome"><div><span className="eyebrow">ΣΥΝΟΠΤΙΚΗ ΕΙΚΟΝΑ</span><h2>Καλώς ήρθατε!</h2><p>Τα οικονομικά στοιχεία της πολυκατοικίας σε ένα σημείο.</p></div><span className="welcome-symbol">⌂</span></div>
  <div className="stats"><div className="stat"><span>Σύνολο κοινοχρήστων</span><strong>{money(totals.expenses)}</strong><small>Καταχωρισμένες δαπάνες</small></div><div className="stat"><span>Εισπράξεις κοινοχρήστων</span><strong>{money(totals.paid)}</strong><small>Καταχωρισμένες πληρωμές</small></div><div className="stat"><span>Διαμερίσματα</span><strong>{allApartments.length}</strong><small>Μονάδες κτιρίου</small></div><div className="stat"><span>Τελευταία στάθμη</span><strong>{data?.tank?data.tank.centimeters+' εκ.':'—'}</strong><small>{data?.tank?.measured_on||'Δεν υπάρχει μέτρηση'}</small></div></div>
+ <section className="panel"><h3>Εισπράξεις αποθηκευμένων κοινοχρήστων</h3>{latestSummary?<><p className="muted">Τελευταία κατάσταση: {new Date(latestSummary.month+'-01T12:00:00').toLocaleDateString('el-GR',{month:'long',year:'numeric'})}</p><div className="stats"><div className="stat"><span>Εξοφλημένα διαμερίσματα</span><strong>{latestSummary.paid_count} / {latestSummary.apartment_count}</strong></div><div className="stat"><span>Εισπράξεις τελευταίου μήνα</span><strong>{money(latestSummary.paid_cents)}</strong></div><div className="stat"><span>Εκκρεμότητες όλων των μηνών</span><strong>{money(outstandingTotal)}</strong></div></div><div className="table-wrap"><table><thead><tr><th>Διαμέρισμα</th><th>Οφειλή</th><th>Εισπράχθηκαν</th><th>Κατάσταση</th></tr></thead><tbody>{latestSummary.apartments.map(a=><tr key={a.apartment_code}><td>{a.apartment_code}</td><td>{money(a.due_cents)}</td><td>{money(a.paid_cents)}</td><td>{a.paid?'Εξοφλήθηκε':'Εκκρεμεί'}</td></tr>)}</tbody></table></div><button type="button" onClick={()=>{setSelectedPaymentMonth(latestSummary.month);setTab('payments');}}>Διαχείριση εξοφλήσεων</button></>:<p className="muted">Δεν υπάρχουν αποθηκευμένες μηνιαίες καταστάσεις.</p>}</section>
  <section className="panel"><h3>Διαμερίσματα</h3><div className="apartment-grid">{allApartments.map(a=><div className="apartment" key={a.id}><span className="apartment-icon">⌂</span><strong>{a.code}</strong><small>Συντελεστής θέρμανσης {a.heating_share}%</small></div>)}</div></section>
  </>}
  {tab==='expenses'&&<section className="panel"><h2>Κατάσταση Κοινοχρήστων</h2><p className="muted">Συμπληρώστε τις δαπάνες μία φορά για ολόκληρη την πολυκατοικία. Η εκτύπωση περιλαμβάνει όλα τα διαμερίσματα.</p>
