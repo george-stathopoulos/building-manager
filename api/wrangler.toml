@@ -1,0 +1,14 @@
+name = "building-manager-api"
+main = "src/index.ts"
+compatibility_date = "2024-11-01"
+workers_dev = true
+
+# Μετά τη δημιουργία βάσης D1, προσθέστε το πραγματικό database_id.
+[[d1_databases]]
+binding = "DB"
+database_name = "building-manager-db"
+database_id = "REPLACE_WITH_YOUR_D1_DATABASE_ID"
+migrations_dir = "migrations"
+
+[vars]
+WEB_ORIGIN = "https://george-stathopoulos.github.io"
