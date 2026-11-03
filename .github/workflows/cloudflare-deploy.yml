@@ -1,0 +1,65 @@
+name: Ανάπτυξη Cloudflare API
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+  actions: write
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: api
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
+      GH_TOKEN: ${{ github.token }}
+      GH_REPO: ${{ github.repository }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Εγκατάσταση εξαρτήσεων
+        run: npm install
+      - name: Δημιουργία ή εύρεση D1
+        id: database
+        shell: bash
+        run: |
+          set -euo pipefail
+          node <<'NODE'
+          const fs=require('node:fs');
+          (async()=>{
+            const root='https://api.cloudflare.com/client/v4/accounts/'+process.env.CLOUDFLARE_ACCOUNT_ID+'/d1/database';
+            const headers={Authorization:'Bearer '+process.env.CLOUDFLARE_API_TOKEN,'Content-Type':'application/json'};
+            let r=await fetch(root+'?per_page=100',{headers});
+            let j=await r.json();
+            if(!r.ok||!j.success)throw new Error('Cannot list D1 databases: '+JSON.stringify(j.errors));
+            let db=j.result.find(x=>x.name==='building-manager-db');
+            if(!db){
+              r=await fetch(root,{method:'POST',headers,body:JSON.stringify({name:'building-manager-db',primary_location_hint:'weur'})});
+              j=await r.json();
+              if(!r.ok||!j.success)throw new Error('Cannot create D1 database: '+JSON.stringify(j.errors));
+              db=j.result;
+            }
+            if(!/^[a-f0-9-]{36}$/i.test(db.uuid))throw new Error('Unexpected D1 database ID');
+            const path='wrangler.toml';
+            const original=fs.readFileSync(path,'utf8');
+            fs.writeFileSync(path,original.replace(/database_id = "[^"]+"/,'database_id = "'+db.uuid+'"'));
+            fs.appendFileSync(process.env.GITHUB_OUTPUT,'database_id='+db.uuid+'\n');
+            console.log('D1 database ready: '+db.name);
+          })().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
+      - name: Εφαρμογή αλλαγών βάσης
+        run: npx wrangler d1 migrations apply building-manager-db --remote
+      - name: Δημοσίευση API
+        run: npx wrangler deploy
+      - name: Καταχώριση διεύθυνσης API
+        shell: bash
+        run: |
+          set -euo pipefail
+          SUBDOMAIN=$(node -e '(async()=>{const r=await fetch("https://api.cloudflare.com/client/v4/accounts/"+process.env.CLOUDFLARE_ACCOUNT_ID+"/workers/subdomain",{headers:{Authorization:"Bearer "+process.env.CLOUDFLARE_API_TOKEN}});const j=await r.json();if(!j.success||!j.result?.subdomain)process.exit(1);console.log(j.result.subdomain)})().catch(()=>process.exit(1))')
+          URL="https://building-manager-api.${SUBDOMAIN}.workers.dev"
+          echo "Worker deployed: $URL"
+          gh api --method PATCH "repos/$GH_REPO/actions/variables/VITE_API_URL" -f value="$URL" >/dev/null || gh api --method POST "repos/$GH_REPO/actions/variables" -f name="VITE_API_URL" -f value="$URL" >/dev/null
+          echo "Frontend API URL configured."
