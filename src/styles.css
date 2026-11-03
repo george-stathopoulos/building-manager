@@ -42,3 +42,14 @@
 .report-legend strong{margin-left:auto;font-size:12px}.report-legend-dot{height:10px;width:10px;border-radius:3px;flex-shrink:0}
 @media(max-width:900px){.report-grid{grid-template-columns:1fr}.report-donut{width:170px;height:170px}}
 @media print{.report-grid,.report-card{display:none!important}}
+
+/* Global form-layout contract: helper text must never stretch a sibling control.
+   Keep control height consistent across all grid forms, regardless of label content. */
+.form-grid,.reading-grid{align-items:start}
+label{align-content:start;grid-auto-rows:max-content;min-width:0}
+input:not([type="checkbox"]):not([type="radio"]),select{height:46px;min-height:46px}
+textarea{min-height:92px;resize:vertical}
+label>span,label>small{line-height:1.4}
+input[type="checkbox"],input[type="radio"]{width:auto;min-width:auto;accent-color:#188d82}
+input:disabled,select:disabled,textarea:disabled{background:#f4f6f8;color:#728391}
+@media(max-width:720px){input:not([type="checkbox"]):not([type="radio"]),select{min-height:44px;height:44px}}
