@@ -110,6 +110,26 @@ export default {
     return response(req,env,{events:events.map((x:any)=>({...x,details:JSON.parse(x.details)}))});
    }
    if(user.role!=='admin')return fail(req,env,'Δεν έχετε δικαίωμα καταχώρισης.',403);
+   if(path==='/api/statements/payments'&&method==='POST'){
+    const b=await jsonBody(req);
+    if(!validMonth(b.month)||typeof b.apartment_code!=='string'||typeof b.paid!=='boolean')return fail(req,env,'Ελέγξτε τα στοιχεία εξόφλησης.');
+    const statement=await env.DB.prepare('SELECT method,items_json FROM monthly_statements WHERE month=?').bind(b.month).first<{method:string;items_json:string}>();
+    if(!statement)return fail(req,env,'Η κατάσταση κοινοχρήστων δεν βρέθηκε.',404);
+    const apartments=(await env.DB.prepare('SELECT id,code,common_weight,heating_share_bp FROM apartments ORDER BY code').all<Apartment>()).results;
+    const target=apartments.find(a=>a.code===b.apartment_code);
+    if(!target)return fail(req,env,'Άγνωστο διαμέρισμα.');
+    const total=(JSON.parse(statement.items_json) as Array<{amount_cents:number}>).reduce((n,x)=>n+x.amount_cents,0);
+    const allocations=allocate(total,apartments,statement.method);
+    const due=allocations[apartments.findIndex(a=>a.id===target.id)];
+    const paidCents=b.paid?due:0;
+    const paidOn=b.paid?iso().slice(0,10):null;
+    const before=await env.DB.prepare('SELECT paid_cents,paid_on FROM statement_payments WHERE month=? AND apartment_id=?').bind(b.month,target.id).first();
+    await env.DB.batch([
+      env.DB.prepare('INSERT INTO statement_payments(month,apartment_id,paid_cents,paid_on,updated_by,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(month,apartment_id) DO UPDATE SET paid_cents=excluded.paid_cents,paid_on=excluded.paid_on,updated_by=excluded.updated_by,updated_at=excluded.updated_at').bind(b.month,target.id,paidCents,paidOn,user.id,iso()),
+      audit(env,user.id,'statement_payment_updated','statement_payment',b.month+':'+target.code,{before,after:{paid_cents:paidCents,paid_on:paidOn},month:b.month,apartment_code:target.code})
+    ]);
+    return response(req,env,{ok:true,month:b.month,apartment_code:target.code,due_cents:due,paid_cents:paidCents});
+   }
    if(path==='/api/statements'&&method==='POST'){
     const b=await jsonBody(req);
     if(!validMonth(b.month)||typeof b.address!=='string'||b.address.length>200||!['equal','shares'].includes(String(b.method))||!Array.isArray(b.items)||b.items.length>40||!b.items.length||!b.names||typeof b.names!=='object'||Array.isArray(b.names))return fail(req,env,'Ελέγξτε την κατάσταση κοινοχρήστων.');
