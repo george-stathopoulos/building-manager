@@ -1,4 +1,4 @@
-interface Env {DB:D1Database; ADMIN_SETUP_KEY:string;WEB_ORIGIN:string}
+interface Env {DB:D1Database; WEB_ORIGIN:string}
 type DbUser={id:string;email:string;role:'admin'|'resident';salt:string;password_hash:string};
 type Apartment={id:string;code:string;common_weight:number;heating_share_bp:number};
 const encoder=new TextEncoder();
@@ -30,15 +30,6 @@ export default {
    if(method==='OPTIONS')return new Response(null,{status:204,headers:{'Access-Control-Allow-Origin':req.headers.get('Origin')||env.WEB_ORIGIN,'Access-Control-Allow-Methods':'GET, POST, OPTIONS','Access-Control-Allow-Headers':'Content-Type, Authorization','Vary':'Origin'}});
    if(path==='/api/health'&&method==='GET')return response(req,env,{ok:true});
    if(path==='/api/bootstrap/status'&&method==='GET'){const r=await env.DB.prepare('SELECT COUNT(*) AS n FROM users').first<{n:number}>();return response(req,env,{configured:(r?.n||0)>0});}
-   if(path==='/api/bootstrap'&&method==='POST'){
-    const body=await jsonBody(req);if(!env.ADMIN_SETUP_KEY||env.ADMIN_SETUP_KEY.length<24)return fail(req,env,'Το κλειδί αρχικής εγκατάστασης δεν έχει ρυθμιστεί.',503);
-    const count=await env.DB.prepare('SELECT COUNT(*) AS n FROM users').first<{n:number}>();if((count?.n||0)!==0)return fail(req,env,'Η αρχική εγκατάσταση έχει ολοκληρωθεί.',409);
-    if(typeof body.setup_key!=='string'||!same(body.setup_key,env.ADMIN_SETUP_KEY))return fail(req,env,'Μη έγκυρο κλειδί εγκατάστασης.',403);
-    if(!validEmail(body.email)||typeof body.password!=='string'||body.password.length<12||body.password.length>128)return fail(req,env,'Εισαγάγετε έγκυρο ηλεκτρονικό ταχυδρομείο και κωδικό 12–128 χαρακτήρων.');
-    const id=uuid(),salt=randomToken(),email=body.email.trim().toLowerCase();
-    await env.DB.batch([env.DB.prepare('INSERT INTO users(id,email,salt,password_hash,role,created_at) VALUES(?,?,?,?,?,?)').bind(id,email,salt,await hashPassword(body.password,salt),'admin',iso()),audit(env,id,'bootstrap','user',id)]);
-    return response(req,env,{token:await session(env,id)},201);
-   }
    if(path==='/api/login'&&method==='POST'){
     const body=await jsonBody(req);if(!validEmail(body.email)||typeof body.password!=='string')return fail(req,env,'Λανθασμένα στοιχεία σύνδεσης.',401);
     const email=body.email.trim().toLowerCase(),cutoff=new Date(Date.now()-15*60000).toISOString();
@@ -124,15 +115,18 @@ export default {
     const b=await jsonBody(req);if(!validDate(b.delivered_on)||typeof b.liters!=='number'||!Number.isFinite(b.liters)||b.liters<=0||!cents(b.cost_cents)||String(b.note||'').length>500)return fail(req,env,'Ελέγξτε τα στοιχεία παράδοσης πετρελαίου.');
     const id=uuid();await env.DB.batch([env.DB.prepare('INSERT INTO fuel_deliveries(id,delivered_on,liters,cost_cents,note,created_by,created_at) VALUES(?,?,?,?,?,?,?)').bind(id,b.delivered_on,b.liters,b.cost_cents,String(b.note||''),user.id,iso()),audit(env,user.id,'fuel_delivery_created','fuel_delivery',id)]);return response(req,env,{id},201);
    }
-   if(path==='/api/invitations'&&method==='POST'){
-    const b=await jsonBody(req);if(!validEmail(b.email)||typeof b.apartment_code!=='string')return fail(req,env,'Ελέγξτε τα στοιχεία πρόσκλησης.');
+   if(path==='/api/residents'&&method==='POST'){
+    const b=await jsonBody(req);
+    if(!validEmail(b.email)||typeof b.password!=='string'||b.password.length<12||b.password.length>128||typeof b.apartment_code!=='string')return fail(req,env,'Ελέγξτε email, διαμέρισμα και κωδικό (τουλάχιστον 12 χαρακτήρες).');
     const a=await env.DB.prepare('SELECT id FROM apartments WHERE code=?').bind(b.apartment_code).first<{id:string}>();
     if(!a)return fail(req,env,'Άγνωστο διαμέρισμα.');
-    const exists=await env.DB.prepare('SELECT id FROM users WHERE email=?').bind(b.email.trim().toLowerCase()).first();
-    if(exists)return fail(req,env,'Ο κάτοικος διαθέτει ήδη λογαριασμό. Η προσθήκη δεύτερου διαμερίσματος θα προστεθεί σε επόμενη έκδοση.',409);
-    const token=randomToken();
-    await env.DB.batch([env.DB.prepare('INSERT INTO invitations(token_hash,email,apartment_id,expires_at,created_at) VALUES(?,?,?,?,?)').bind(await sha(token),b.email.trim().toLowerCase(),a.id,new Date(Date.now()+7*86400000).toISOString(),iso()),audit(env,user.id,'invitation_created','apartment',a.id)]);
-    return response(req,env,{token},201);
+    const id=uuid(),salt=randomToken(),email=b.email.trim().toLowerCase();
+    await env.DB.batch([
+     env.DB.prepare('INSERT INTO users(id,email,salt,password_hash,role,created_at) VALUES(?,?,?,?,?,?)').bind(id,email,salt,await hashPassword(b.password,salt),'resident',iso()),
+     env.DB.prepare('INSERT INTO memberships(user_id,apartment_id,created_at) VALUES(?,?,?)').bind(id,a.id,iso()),
+     audit(env,user.id,'resident_created','user',id,{apartment_code:b.apartment_code})
+    ]);
+    return response(req,env,{ok:true},201);
    }
    return fail(req,env,'Η λειτουργία δεν βρέθηκε.',404);
   }catch(e){const err=e instanceof Error?e.message:'Άγνωστο σφάλμα';console.error('Σφάλμα αιτήματος',err.replace(/[\w.+-]+@[\w.-]+/g,'[email]'));return fail(req,env,err.includes('UNIQUE constraint')?'Η εγγραφή υπάρχει ήδη.':'Δεν ήταν δυνατή η ολοκλήρωση της ενέργειας.',err.includes('UNIQUE constraint')?409:500);}
