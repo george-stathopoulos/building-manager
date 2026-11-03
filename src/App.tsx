@@ -37,7 +37,7 @@ function App(){
  const [inviteApartment,setInviteApartment]=useState('A1');
  const [generatedInvite,setGeneratedInvite]=useState('');
  async function refresh(){try{const x=await request<Overview>('/overview');setData(x);setStatus('');}catch(e){setStatus((e as Error).message);}}
- useEffect(()=>{if(!configured)return;request<{configured:boolean}>('/bootstrap/status').then(r=>setIsConfigured(r.configured)).catch(()=>setIsConfigured(true));if(authenticated())refresh();},[]);
+ useEffect(()=>{if(!configured)return;request<{configured:boolean}>('/bootstrap/status').then(r=>setIsConfigured(r.configured)).catch(()=>setIsConfigured(null));if(authenticated())refresh();},[]);
  async function doAuth(e:FormEvent){e.preventDefault();setLoading(true);setStatus('');try{
  const endpoint=loginMode==='setup'?'/bootstrap':loginMode==='invite'?'/invitations/accept':'/login';
  const args=loginMode==='setup'?{email:authEmail,password,setup_key:setupKey}:loginMode==='invite'?{email:authEmail,password,token:inviteToken}:{email:authEmail,password};
@@ -61,7 +61,7 @@ function App(){
  {loginMode==='invite'&&<label>Κωδικός πρόσκλησης<input required value={inviteToken} onChange={e=>setInviteToken(e.target.value)}/></label>}
  <button disabled={loading}>{loading?'Παρακαλώ περιμένετε…':loginMode==='setup'?'Δημιουργία διαχειριστή':loginMode==='invite'?'Αποδοχή πρόσκλησης':'Σύνδεση'}</button>
  </form>
- <div className="auth-options"><button className="link" onClick={()=>setLoginMode('login')}>Σύνδεση</button><button className="link" onClick={()=>setLoginMode('invite')}>Έχω πρόσκληση</button>{isConfigured===false&&<button className="link" onClick={()=>setLoginMode('setup')}>Αρχική εγκατάσταση</button>}</div>
+ <div className="auth-options"><button className="link" onClick={()=>setLoginMode('login')}>Σύνδεση</button><button className="link" onClick={()=>setLoginMode('invite')}>Έχω πρόσκληση</button>{isConfigured!==true&&<button className="link" onClick={()=>setLoginMode('setup')}>Αρχική εγκατάσταση</button>}</div>
  {status&&<p className="error" role="alert">{status}</p>}
  </section></main>;
  return <div className="shell">
