@@ -3,7 +3,7 @@ import {configured,authenticated,saveToken,clearToken,request,type Overview} fro
 import {money} from './accounting';
 type Tab='home'|'expenses'|'heating'|'payments'|'residents'|'history';
 const apartmentCodes=['A1','A2','A3','B1','B2','B3'];
-const demo:Overview={role:'admin',email:'',my_apartments:[],apartments:apartmentCodes.map((code,i)=>({id:String(i),code,heating_share:[19.25,14,16.75,19.25,14,16.75][i],common_share:1})),expenses:[],payments:[],readings:[],fuel_deliveries:[],tank:null};
+const demo:Overview={role:'admin',email:'',my_apartments:[],apartments:apartmentCodes.map((code,i)=>({id:String(i),code,heating_share:[19.25,14,16.75,19.25,14,16.75][i],common_share:1})),expenses:[],payments:[],readings:[],fuel_deliveries:[],tank:null,tank_history:[]};
 const navigation:{id:Tab;name:string;icon:string}[]=[{id:'home',name:'Αρχική',icon:'⌂'},{id:'expenses',name:'Κοινόχρηστα',icon:'▤'},{id:'heating',name:'Θέρμανση',icon:'♨'},{id:'payments',name:'Πληρωμές',icon:'€'},{id:'residents',name:'Κάτοικοι',icon:'♙'},{id:'history',name:'Ιστορικό',icon:'◷'}];
 const amount=(v:string)=>Math.round(Number(v.replace(',','.'))*100);
 const nowMonth=()=>new Date().toISOString().slice(0,7);
@@ -38,6 +38,16 @@ function App(){
  const [fuelCost,setFuelCost]=useState('');
  const [fuelNote,setFuelNote]=useState('');
  const [readings,setReadings]=useState<Record<string,string>>({});
+ const [editingReadingsDate,setEditingReadingsDate]=useState<string|null>(null);
+ const [editingFuelId,setEditingFuelId]=useState<string|null>(null);
+ const [editingPaymentId,setEditingPaymentId]=useState<string|null>(null);
+ const [auditEvents,setAuditEvents]=useState<Array<{id:string;action:string;entity_type:string;entity_id:string;details:unknown;created_at:string}>>([]);
+ async function loadAudit(){if(data?.role!=='admin')return;try{const r=await request<{events:typeof auditEvents}>('/audit');setAuditEvents(r.events);}catch{/* kept separate from primary dashboard */}}
+ function editReading(date:string){const t=data?.tank_history.find(x=>x.measured_on===date);if(!t)return;setEditingReadingsDate(date);setReadingDate(date);setTank(String(t.centimeters));setReadings(Object.fromEntries((data?.readings||[]).filter(x=>x.measured_on===date).map(x=>[x.apartment_code,String(x.reading)])));setTab('heating');window.scrollTo({top:0,behavior:'smooth'});}
+ function cancelReadingEdit(){setEditingReadingsDate(null);setTank('');setReadings({});}
+ function editFuel(id:string){const x=data?.fuel_deliveries.find(x=>x.id===id);if(!x)return;setEditingFuelId(id);setFuelDate(x.delivered_on);setFuelLiters(String(x.liters));setFuelCost(String(x.cost_cents/100));setFuelNote(x.note);}
+ function editPayment(id:string){const x=data?.payments.find(x=>x.id===id);if(!x)return;setEditingPaymentId(id);setPaymentApartment(x.apartment_code);setPaymentKind(x.kind);setPaymentAmount(String(x.amount_cents/100));}
+
  const [inviteEmail,setInviteEmail]=useState('');
  const [inviteApartment,setInviteApartment]=useState('A1');
  const [residentPassword,setResidentPassword]=useState('');
