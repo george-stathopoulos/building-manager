@@ -26,7 +26,13 @@ function App(){
  const [residentNames,setResidentNames]=useState<Record<string,string>>({'A1':'ΕΛΕΝΗ','A2':'ΜΠΙΤΑ ΚΩΝ/ΝΑ','A3':'ΣΤΑΘΟΠΟΥΛΟΣ','B1':'ΣΕΡΑΦΕΙΜ','B2':'ΚΩΝΣΤΑΝΤΙΝΑ ΜΑΡΙΑ','B3':'ΜΠΙΤΑΣ ΓΡΗΓΟΡΗΣ'});
  const [savedStatements,setSavedStatements]=useState<Array<{month:string;address:string;method:'equal'|'shares';items:Array<{name:string;amount_cents:number}>;names:Record<string,string>;updated_at:string}>>([]);
  const [statementStatus,setStatementStatus]=useState('');
- async function loadStatements(){try{const r=await request<{statements:typeof savedStatements}>('/statements');setSavedStatements(r.statements);}catch(e){setStatementStatus((e as Error).message);}}
+ const [selectedPaymentMonth,setSelectedPaymentMonth]=useState('');
+ const [statementPayments,setStatementPayments]=useState<Array<{apartment_code:string;due_cents:number;paid_cents:number;balance_cents:number;paid_on:string|null;status:'paid'|'partial'|'unpaid'}>>([]);
+ const [paymentBusy,setPaymentBusy]=useState<string|null>(null);
+ async function loadStatementPayments(m:string){if(!m){setStatementPayments([]);return;}try{const result=await request<{apartments:typeof statementPayments}>('/statements/payments?month='+encodeURIComponent(m));setStatementPayments(result.apartments);}catch(e){setStatus((e as Error).message);}}
+ async function toggleStatementPayment(apartment_code:string,paid:boolean){if(!selectedPaymentMonth)return;setPaymentBusy(apartment_code);setStatus('');try{await request('/statements/payments',{method:'POST',body:JSON.stringify({month:selectedPaymentMonth,apartment_code,paid})});await loadStatementPayments(selectedPaymentMonth);}catch(e){setStatus((e as Error).message);}finally{setPaymentBusy(null);}}
+
+ async function loadStatements(){try{const r=await request<{statements:typeof savedStatements}>('/statements');setSavedStatements(r.statements);setSelectedPaymentMonth(m=>m||r.statements[0]?.month||'');}catch(e){setStatementStatus((e as Error).message);}}
  function openStatement(m:string){const x=savedStatements.find(x=>x.month===m);if(!x)return;setMonth(x.month);setBuildingAddress(x.address);setAllocationMethod(x.method);setResidentNames(x.names);setCharges(x.items.map(c=>({name:c.name,enabled:true,value:String(c.amount_cents/100)})));setTab('expenses');setStatementStatus('Φορτώθηκε η αποθηκευμένη κατάσταση. Μπορείτε να τη διορθώσετε και να την αποθηκεύσετε ξανά.');}
  const [paymentApartment,setPaymentApartment]=useState('A1');
  const [paymentKind,setPaymentKind]=useState<'common'|'heating'>('common');
@@ -54,6 +60,7 @@ function App(){
  const [residentPassword,setResidentPassword]=useState('');
  async function refresh(){try{const x=await request<Overview>('/overview');setData(x);setStatus('');await loadStatements();}catch(e){setStatus((e as Error).message);}}
  useEffect(()=>{if(!configured)return;request<{configured:boolean}>('/bootstrap/status').then(r=>setIsConfigured(r.configured)).catch(()=>setIsConfigured(null));if(authenticated())refresh();},[]);
+ useEffect(()=>{if(authenticated()&&selectedPaymentMonth)loadStatementPayments(selectedPaymentMonth);},[selectedPaymentMonth]);
  async function doAuth(e:FormEvent){e.preventDefault();setLoading(true);setStatus('');try{
  const endpoint='/login';
  const args={email:authEmail,password};
