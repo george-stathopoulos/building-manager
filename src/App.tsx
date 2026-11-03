@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import {configured,authenticated,saveToken,clearToken,request,type Overview} from './api';
 import {money} from './accounting';
 type Tab='home'|'expenses'|'heating'|'payments'|'residents'|'history';
@@ -73,11 +73,6 @@ function App(){
  const r=await request<{token:string}>(endpoint,{method:'POST',body:JSON.stringify(args)});saveToken(r.token);setPassword('');await refresh();
  }catch(err){setStatus((err as Error).message);}finally{setLoading(false);}}
  async function submit(path:string,payload:object,after:()=>void){setLoading(true);setStatus('');try{await request(path,{method:'POST',body:JSON.stringify(payload)});after();await refresh();}catch(e){setStatus((e as Error).message);}finally{setLoading(false);}}
- const totals=useMemo(()=>{
- const expenses=data?.expenses.reduce((s,e)=>s+e.amount_cents,0)||0;
- const paid=data?.payments.filter(p=>p.kind==='common').reduce((s,p)=>s+p.amount_cents,0)||0;
- return {expenses,paid};
- },[data]);
  const latestSummary=paymentSummaries[0];
  const outstandingTotal=paymentSummaries.reduce((n,x)=>n+x.balance_cents,0);
  const allApartments=data?.apartments||demo.apartments;
