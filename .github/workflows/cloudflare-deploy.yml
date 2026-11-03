@@ -82,3 +82,23 @@ jobs:
           NODE
           trap 'rm -f admin-provision.sql' EXIT
           npx wrangler d1 execute building-manager-db --remote --file=admin-provision.sql
+      - name: Έλεγχος σύνδεσης διαχειριστή
+        env:
+          ADMIN_EMAIL: ${{ secrets.ADMIN_EMAIL }}
+          ADMIN_PASSWORD: ${{ secrets.ADMIN_PASSWORD }}
+        run: |
+          node <<'NODE'
+          (async()=>{
+            if(!process.env.ADMIN_EMAIL||!process.env.ADMIN_PASSWORD)throw Error('Missing admin credentials');
+            const base='https://building-manager-api.george-stathopoulos.workers.dev';
+            const health=await fetch(base+'/api/health');
+            if(!health.ok)throw Error('API health failed: HTTP '+health.status);
+            const res=await fetch(base+'/api/login',{method:'POST',headers:{'Content-Type':'application/json','Origin':'https://george-stathopoulos.github.io'},body:JSON.stringify({email:process.env.ADMIN_EMAIL,password:process.env.ADMIN_PASSWORD})});
+            const body=await res.json().catch(()=>({}));
+            if(!res.ok)throw Error('Admin login failed: HTTP '+res.status+' '+String(body.error||'unknown'));
+            if(!body.token)throw Error('Login did not return session token');
+            const overview=await fetch(base+'/api/overview',{headers:{Authorization:'Bearer '+body.token,'Origin':'https://george-stathopoulos.github.io'}});
+            if(!overview.ok)throw Error('Overview failed: HTTP '+overview.status);
+            console.log('Admin login and overview passed');
+          })().catch(e=>{console.error(e.message);process.exit(1)});
+          NODE
