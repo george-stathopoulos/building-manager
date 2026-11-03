@@ -75,9 +75,9 @@ jobs:
           const password=process.env.ADMIN_PASSWORD;
           if(!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)||password.length<12||password.length>128)throw Error('Invalid admin credentials');
           const salt=crypto.randomBytes(32).toString('hex');
-          const hash=crypto.pbkdf2Sync(password,salt,210000,32,'sha256').toString('hex');
+          const hash=crypto.pbkdf2Sync(password,salt,100000,32,'sha256').toString('hex');
           const esc=x=>x.replace(/'/g,"''");
-          const sql="INSERT INTO users(id,email,salt,password_hash,role,created_at) SELECT '"+crypto.randomUUID()+"','"+esc(email)+"','"+salt+"','"+hash+"','admin','"+new Date().toISOString()+"' WHERE NOT EXISTS (SELECT 1 FROM users);";
+          const sql="UPDATE users SET salt='"+salt+"',password_hash='"+hash+"' WHERE email='"+esc(email)+"' AND role='admin'; INSERT INTO users(id,email,salt,password_hash,role,created_at) SELECT '"+crypto.randomUUID()+"','"+esc(email)+"','"+salt+"','"+hash+"','admin','"+new Date().toISOString()+"' WHERE NOT EXISTS (SELECT 1 FROM users WHERE role='admin');";
           fs.writeFileSync('admin-provision.sql',sql,{mode:0o600});
           NODE
           trap 'rm -f admin-provision.sql' EXIT
