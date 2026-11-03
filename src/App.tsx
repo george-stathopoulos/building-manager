@@ -3,7 +3,7 @@ import {configured,authenticated,saveToken,clearToken,request,type Overview} fro
 import {money} from './accounting';
 type Tab='home'|'expenses'|'heating'|'payments'|'residents'|'history';
 const apartmentCodes=['A1','A2','A3','B1','B2','B3'];
-const demo:Overview={role:'admin',email:'',my_apartments:[],apartments:apartmentCodes.map((code,i)=>({id:String(i),code,heating_share:[19.25,14,16.75,19.25,14,16.75][i],common_share:1})),expenses:[],payments:[],readings:[],tank:null};
+const demo:Overview={role:'admin',email:'',my_apartments:[],apartments:apartmentCodes.map((code,i)=>({id:String(i),code,heating_share:[19.25,14,16.75,19.25,14,16.75][i],common_share:1})),expenses:[],payments:[],readings:[],fuel_deliveries:[],tank:null};
 const navigation:{id:Tab;name:string;icon:string}[]=[{id:'home',name:'Αρχική',icon:'⌂'},{id:'expenses',name:'Κοινόχρηστα',icon:'▤'},{id:'heating',name:'Θέρμανση',icon:'♨'},{id:'payments',name:'Πληρωμές',icon:'€'},{id:'residents',name:'Κάτοικοι',icon:'♙'},{id:'history',name:'Ιστορικό',icon:'◷'}];
 const amount=(v:string)=>Math.round(Number(v.replace(',','.'))*100);
 const nowMonth=()=>new Date().toISOString().slice(0,7);
@@ -28,6 +28,10 @@ function App(){
  const [paymentAmount,setPaymentAmount]=useState('');
  const [readingDate,setReadingDate]=useState(new Date().toISOString().slice(0,10));
  const [tank,setTank]=useState('');
+ const [fuelDate,setFuelDate]=useState(new Date().toISOString().slice(0,10));
+ const [fuelLiters,setFuelLiters]=useState('');
+ const [fuelCost,setFuelCost]=useState('');
+ const [fuelNote,setFuelNote]=useState('');
  const [readings,setReadings]=useState<Record<string,string>>({});
  const [inviteEmail,setInviteEmail]=useState('');
  const [inviteApartment,setInviteApartment]=useState('A1');
@@ -88,6 +92,14 @@ function App(){
  {isAdmin&&configured&&<form onSubmit={e=>{e.preventDefault();submit('/readings',{measured_on:readingDate,centimeters:Number(tank),readings:allApartments.map(a=>({apartment_code:a.code,reading:Number(readings[a.code])}))},()=>{setTank('');setReadings({});});}} className="stack">
  <div className="form-grid"><label>Ημερομηνία<input type="date" required value={readingDate} onChange={e=>setReadingDate(e.target.value)}/></label><label>Στάθμη δεξαμενής (εκ.)<input type="number" step="0.1" min="0" required value={tank} onChange={e=>setTank(e.target.value)}/></label></div>
  <div className="reading-grid">{allApartments.map(a=><label key={a.code}>{a.code}<input type="number" required min="0" step="1" placeholder="Ένδειξη" value={readings[a.code]||''} onChange={e=>setReadings(v=>({...v,[a.code]:e.target.value}))}/></label>)}</div><button disabled={loading}>Αποθήκευση μετρήσεων</button></form>}
+ <section className="panel"><h2>Παραδόσεις πετρελαίου</h2><p className="muted">Καταγραφή λίτρων και κόστους κάθε ανεφοδιασμού. Οι παραδόσεις δεν δημιουργούν αυτόματα χρεώσεις διαμερισμάτων.</p>
+ {isAdmin&&configured&&<form className="form-grid" onSubmit={e=>{e.preventDefault();submit('/fuel-deliveries',{delivered_on:fuelDate,liters:Number(fuelLiters),cost_cents:amount(fuelCost),note:fuelNote},()=>{setFuelLiters('');setFuelCost('');setFuelNote('');});}}>
+ <label>Ημερομηνία παράδοσης<input type="date" required value={fuelDate} onChange={e=>setFuelDate(e.target.value)}/></label>
+ <label>Ποσότητα (λίτρα)<input type="number" min="0.01" step="0.01" required value={fuelLiters} onChange={e=>setFuelLiters(e.target.value)}/></label>
+ <label>Συνολικό κόστος (€)<input type="number" min="0.01" step="0.01" required value={fuelCost} onChange={e=>setFuelCost(e.target.value)}/></label>
+ <label>Σημειώσεις<input maxLength={500} value={fuelNote} onChange={e=>setFuelNote(e.target.value)}/></label>
+ <button disabled={loading}>Καταχώριση ανεφοδιασμού</button></form>}
+ <div className="table-wrap"><table><thead><tr><th>Ημερομηνία</th><th>Λίτρα</th><th>Κόστος</th><th>Σημειώσεις</th></tr></thead><tbody>{data?.fuel_deliveries.map(f=><tr key={f.id}><td>{f.delivered_on}</td><td>{f.liters.toLocaleString('el-GR')}</td><td>{money(f.cost_cents)}</td><td>{f.note||'—'}</td></tr>)}{!data?.fuel_deliveries.length&&<tr><td colSpan={4} className="empty">Δεν υπάρχουν καταχωρισμένοι ανεφοδιασμοί.</td></tr>}</tbody></table></div></section>
  <div className="table-wrap"><table><thead><tr><th>Ημερομηνία</th><th>Διαμέρισμα</th><th>Ένδειξη</th></tr></thead><tbody>{data?.readings.map(r=><tr key={r.id}><td>{r.measured_on}</td><td>{r.apartment_code}</td><td>{r.reading.toLocaleString('el-GR')}</td></tr>)}{!data?.readings.length&&<tr><td colSpan={3} className="empty">Δεν υπάρχουν μετρήσεις.</td></tr>}</tbody></table></div></section></>}
  {tab==='residents'&&isAdmin&&<section className="panel"><h2>Πρόσκληση κατοίκων</h2><p className="muted">Ο κάθε κάτοικος έχει πρόσβαση μόνο στο δικό του διαμέρισμα.</p>
  {configured&&<form className="form-grid" onSubmit={async e=>{e.preventDefault();setLoading(true);try{const r=await request<{token:string}>('/invitations',{method:'POST',body:JSON.stringify({email:inviteEmail,apartment_code:inviteApartment})});setGeneratedInvite(location.origin+location.pathname+'?πρόσκληση='+encodeURIComponent(r.token));setStatus('Η πρόσκληση δημιουργήθηκε.');}catch(err){setStatus((err as Error).message);}finally{setLoading(false);}}}>
