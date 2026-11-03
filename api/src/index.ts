@@ -31,19 +31,27 @@ export default {
    if(path==='/api/health'&&method==='GET')return response(req,env,{ok:true});
    if(path==='/api/bootstrap/status'&&method==='GET'){const r=await env.DB.prepare('SELECT COUNT(*) AS n FROM users').first<{n:number}>();return response(req,env,{configured:(r?.n||0)>0});}
    if(path==='/api/login'&&method==='POST'){
+    let loginStage='request';
+    try {
     const body=await jsonBody(req);if(!validEmail(body.email)||typeof body.password!=='string')return fail(req,env,'Λανθασμένα στοιχεία σύνδεσης.',401);
     const email=body.email.trim().toLowerCase(),cutoff=new Date(Date.now()-15*60000).toISOString();
+    loginStage='attempts';
     const attempts=await env.DB.prepare('SELECT attempts,window_start FROM login_attempts WHERE email=?').bind(email).first<{attempts:number;window_start:string}>();
     if(attempts&&attempts.window_start>cutoff&&attempts.attempts>=7)return fail(req,env,'Πολλές αποτυχημένες προσπάθειες. Δοκιμάστε αργότερα.',429);
+    loginStage='user';
     const user=await env.DB.prepare('SELECT * FROM users WHERE email=?').bind(email).first<DbUser>();
+    loginStage='password_hash';
     const supplied=user?await hashPassword(body.password,user.salt):'';
     if(!user||!same(supplied,user.password_hash)){
      const n=attempts&&attempts.window_start>cutoff?attempts.attempts+1:1;
      await env.DB.prepare('INSERT INTO login_attempts(email,attempts,window_start) VALUES(?,?,?) ON CONFLICT(email) DO UPDATE SET attempts=excluded.attempts,window_start=excluded.window_start').bind(email,n,attempts&&attempts.window_start>cutoff?attempts.window_start:iso()).run();
      return fail(req,env,'Λανθασμένα στοιχεία σύνδεσης.',401);
     }
+    loginStage='clear_attempts';
     await env.DB.prepare('DELETE FROM login_attempts WHERE email=?').bind(email).run();
+    loginStage='session';
     return response(req,env,{token:await session(env,user.id)});
+    } catch(e) { console.error('Login stage:',loginStage,e instanceof Error?e.name:'unknown');return fail(req,env,'Σφάλμα σύνδεσης ('+loginStage+').',500); }
    }
    if(path==='/api/invitations/accept'&&method==='POST'){
     const b=await jsonBody(req);if(!validEmail(b.email)||typeof b.password!=='string'||b.password.length<12||b.password.length>128||typeof b.token!=='string'||!/^([a-f0-9]{64})$/.test(b.token))return fail(req,env,'Μη έγκυρα στοιχεία πρόσκλησης.');
