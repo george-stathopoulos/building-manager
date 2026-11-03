@@ -18,7 +18,6 @@ jobs:
       CLOUDFLARE_ACCOUNT_ID: ${{ vars.CLOUDFLARE_ACCOUNT_ID }}
       GH_TOKEN: ${{ github.token }}
       GH_REPO: ${{ github.repository }}
-      ADMIN_SETUP_KEY_PRESENT: ${{ secrets.ADMIN_SETUP_KEY != '' }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -59,7 +58,8 @@ jobs:
       - name: Δημοσίευση API
         run: npx wrangler deploy
       - name: Εγκατάσταση μυστικού αρχικής ρύθμισης
-        if: ${{ env.ADMIN_SETUP_KEY_PRESENT == 'true' }}
         env:
           ADMIN_SETUP_KEY: ${{ secrets.ADMIN_SETUP_KEY }}
-        run: printf '%s' "$ADMIN_SETUP_KEY" | npx wrangler secret put ADMIN_SETUP_KEY
+        run: |
+          if [ -z "$ADMIN_SETUP_KEY" ]; then echo '::error::Missing ADMIN_SETUP_KEY repository secret'; exit 1; fi
+          printf '%s' "$ADMIN_SETUP_KEY" | npx wrangler secret put ADMIN_SETUP_KEY
