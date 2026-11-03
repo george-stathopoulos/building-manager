@@ -13,11 +13,11 @@ function App(){
  const [status,setStatus]=useState('');
  const [loading,setLoading]=useState(false);
  const [isConfigured,setIsConfigured]=useState<boolean|null>(null);
- const [loginMode,setLoginMode]=useState<'login'|'setup'|'invite'>('login');
+ 
  const [authEmail,setAuthEmail]=useState('');
  const [password,setPassword]=useState('');
- const [setupKey,setSetupKey]=useState('');
- const [inviteToken,setInviteToken]=useState(new URLSearchParams(location.search).get('πρόσκληση')||'');
+
+
  const [month,setMonth]=useState(nowMonth());
  const [category,setCategory]=useState('Καθαριότητα');
  const [description,setDescription]=useState('');
@@ -35,12 +35,12 @@ function App(){
  const [readings,setReadings]=useState<Record<string,string>>({});
  const [inviteEmail,setInviteEmail]=useState('');
  const [inviteApartment,setInviteApartment]=useState('A1');
- const [generatedInvite,setGeneratedInvite]=useState('');
+ const [residentPassword,setResidentPassword]=useState('');
  async function refresh(){try{const x=await request<Overview>('/overview');setData(x);setStatus('');}catch(e){setStatus((e as Error).message);}}
  useEffect(()=>{if(!configured)return;request<{configured:boolean}>('/bootstrap/status').then(r=>setIsConfigured(r.configured)).catch(()=>setIsConfigured(null));if(authenticated())refresh();},[]);
  async function doAuth(e:FormEvent){e.preventDefault();setLoading(true);setStatus('');try{
- const endpoint=loginMode==='setup'?'/bootstrap':loginMode==='invite'?'/invitations/accept':'/login';
- const args=loginMode==='setup'?{email:authEmail,password,setup_key:setupKey}:loginMode==='invite'?{email:authEmail,password,token:inviteToken}:{email:authEmail,password};
+ const endpoint='/login';
+ const args={email:authEmail,password};
  const r=await request<{token:string}>(endpoint,{method:'POST',body:JSON.stringify(args)});saveToken(r.token);setPassword('');await refresh();
  }catch(err){setStatus((err as Error).message);}finally{setLoading(false);}}
  async function submit(path:string,payload:object,after:()=>void){setLoading(true);setStatus('');try{await request(path,{method:'POST',body:JSON.stringify(payload)});after();await refresh();}catch(e){setStatus((e as Error).message);}finally{setLoading(false);}}
@@ -53,15 +53,14 @@ function App(){
  const isAdmin=data?.role==='admin';
  if(configured&&!data)return <main className="auth-page"><section className="auth-card">
  <div className="brand-mark">⌂</div><h1>Διαχείριση Πολυκατοικίας</h1><p className="muted">Ασφαλής πρόσβαση διαχειριστή και κατοίκων</p>
- {isConfigured===false&&loginMode==='login'&&<div className="notice">Η αρχική εγκατάσταση δεν έχει ολοκληρωθεί. Ο διαχειριστής μπορεί να δημιουργήσει τον πρώτο λογαριασμό.</div>}
+ {isConfigured===false&&<div className="notice">Ο λογαριασμός διαχειριστή δεν έχει ενεργοποιηθεί ακόμη.</div>}
  <form onSubmit={doAuth} className="stack">
  <label>Ηλεκτρονική διεύθυνση<input type="email" required value={authEmail} onChange={e=>setAuthEmail(e.target.value)}/></label>
  <label>Κωδικός πρόσβασης<input type="password" minLength={12} required value={password} onChange={e=>setPassword(e.target.value)}/></label>
- {loginMode==='setup'&&<label>Κλειδί αρχικής εγκατάστασης<input type="password" required value={setupKey} onChange={e=>setSetupKey(e.target.value)}/></label>}
- {loginMode==='invite'&&<label>Κωδικός πρόσκλησης<input required value={inviteToken} onChange={e=>setInviteToken(e.target.value)}/></label>}
- <button disabled={loading}>{loading?'Παρακαλώ περιμένετε…':loginMode==='setup'?'Δημιουργία διαχειριστή':loginMode==='invite'?'Αποδοχή πρόσκλησης':'Σύνδεση'}</button>
+ 
+ <button disabled={loading}>{loading?'Παρακαλώ περιμένετε…':'Σύνδεση'}</button>
  </form>
- <div className="auth-options"><button className="link" onClick={()=>setLoginMode('login')}>Σύνδεση</button><button className="link" onClick={()=>setLoginMode('invite')}>Έχω πρόσκληση</button>{isConfigured!==true&&<button className="link" onClick={()=>setLoginMode('setup')}>Αρχική εγκατάσταση</button>}</div>
+
  {status&&<p className="error" role="alert">{status}</p>}
  </section></main>;
  return <div className="shell">
@@ -101,10 +100,11 @@ function App(){
  <button disabled={loading}>Καταχώριση ανεφοδιασμού</button></form>}
  <div className="table-wrap"><table><thead><tr><th>Ημερομηνία</th><th>Λίτρα</th><th>Κόστος</th><th>Σημειώσεις</th></tr></thead><tbody>{data?.fuel_deliveries.map(f=><tr key={f.id}><td>{f.delivered_on}</td><td>{f.liters.toLocaleString('el-GR')}</td><td>{money(f.cost_cents)}</td><td>{f.note||'—'}</td></tr>)}{!data?.fuel_deliveries.length&&<tr><td colSpan={4} className="empty">Δεν υπάρχουν καταχωρισμένοι ανεφοδιασμοί.</td></tr>}</tbody></table></div></section>
  <div className="table-wrap"><table><thead><tr><th>Ημερομηνία</th><th>Διαμέρισμα</th><th>Ένδειξη</th></tr></thead><tbody>{data?.readings.map(r=><tr key={r.id}><td>{r.measured_on}</td><td>{r.apartment_code}</td><td>{r.reading.toLocaleString('el-GR')}</td></tr>)}{!data?.readings.length&&<tr><td colSpan={3} className="empty">Δεν υπάρχουν μετρήσεις.</td></tr>}</tbody></table></div></section></>}
- {tab==='residents'&&isAdmin&&<section className="panel"><h2>Πρόσκληση κατοίκων</h2><p className="muted">Ο κάθε κάτοικος έχει πρόσβαση μόνο στο δικό του διαμέρισμα.</p>
- {configured&&<form className="form-grid" onSubmit={async e=>{e.preventDefault();setLoading(true);try{const r=await request<{token:string}>('/invitations',{method:'POST',body:JSON.stringify({email:inviteEmail,apartment_code:inviteApartment})});setGeneratedInvite(location.origin+location.pathname+'?πρόσκληση='+encodeURIComponent(r.token));setStatus('Η πρόσκληση δημιουργήθηκε.');}catch(err){setStatus((err as Error).message);}finally{setLoading(false);}}}>
- <label>Ηλεκτρονική διεύθυνση<input type="email" required value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)}/></label><label>Διαμέρισμα<select value={inviteApartment} onChange={e=>setInviteApartment(e.target.value)}>{allApartments.map(a=><option key={a.id}>{a.code}</option>)}</select></label><button disabled={loading}>Δημιουργία πρόσκλησης</button></form>}
- {generatedInvite&&<div className="notice"><strong>Ιδιωτικός σύνδεσμος πρόσκλησης:</strong><textarea readOnly value={generatedInvite} rows={3}/><button onClick={()=>navigator.clipboard.writeText(generatedInvite)}>Αντιγραφή συνδέσμου</button></div>}</section>}
+ {tab==='residents'&&isAdmin&&<section className="panel"><h2>Λογαριασμοί κατοίκων</h2><p className="muted">Δημιουργήστε στοιχεία σύνδεσης για κάθε κάτοικο. Ο κάθε κάτοικος βλέπει μόνο το δικό του διαμέρισμα.</p>
+ {configured&&<form className="form-grid" onSubmit={e=>{e.preventDefault();submit('/residents',{email:inviteEmail,password:residentPassword,apartment_code:inviteApartment},()=>{setInviteEmail('');setResidentPassword('');setStatus('Ο λογαριασμός κατοίκου δημιουργήθηκε.');});}}>
+ <label>Ηλεκτρονική διεύθυνση<input type="email" required value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)}/></label>
+ <label>Προσωρινός κωδικός πρόσβασης<input type="password" minLength={12} required value={residentPassword} onChange={e=>setResidentPassword(e.target.value)}/></label>
+ <label>Διαμέρισμα<select value={inviteApartment} onChange={e=>setInviteApartment(e.target.value)}>{allApartments.map(a=><option key={a.id}>{a.code}</option>)}</select></label><button disabled={loading}>Δημιουργία κατοίκου</button></form>}</section>}
  {tab==='history'&&<section className="panel"><h2>Ιστορικό καταχωρίσεων</h2><p className="muted">Τα στοιχεία προέρχονται από την ασφαλή βάση δεδομένων. Οι οριστικοποιημένες εγγραφές δεν αντικαθίστανται σιωπηρά.</p><div className="history-list"><div>▤ <strong>{data?.expenses.length||0}</strong> καταχωρίσεις κοινοχρήστων</div><div>€ <strong>{data?.payments.length||0}</strong> καταχωρίσεις πληρωμών</div><div>♨ <strong>{data?.readings.length||0}</strong> καταχωρίσεις μετρητών</div></div></section>}
  <footer className="footnote">Διαχείριση Πολυκατοικίας · Ελληνική έκδοση · Οι οικονομικές εγγραφές δεν αποθηκεύονται στο GitHub.</footer>
  </main><nav className="bottom-nav" aria-label="Κύρια πλοήγηση κινητού">{navigation.filter(x=>['home','expenses','heating','payments'].includes(x.id)).map(x=><button key={x.id} className={tab===x.id?'active':''} onClick={()=>setTab(x.id)}><span>{x.icon}</span><small>{x.name}</small></button>)}</nav></div>;
