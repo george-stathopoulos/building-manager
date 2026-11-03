@@ -78,8 +78,9 @@ export default {
     const ps=(await env.DB.prepare('SELECT p.id,a.code AS apartment_code,p.kind,p.amount_cents,p.paid_on FROM payments p JOIN apartments a ON a.id=p.apartment_id ORDER BY p.paid_on DESC,p.created_at DESC LIMIT 500').all<{id:string;apartment_code:string;kind:string;amount_cents:number;paid_on:string}>()).results;
     const rs=(await env.DB.prepare('SELECT r.id,a.code AS apartment_code,r.reading,r.measured_on FROM heating_readings r JOIN apartments a ON a.id=r.apartment_id ORDER BY r.measured_on DESC,a.code LIMIT 500').all<{id:string;apartment_code:string;reading:number;measured_on:string}>()).results;
     const tank=await env.DB.prepare('SELECT measured_on,centimeters FROM tank_measurements ORDER BY measured_on DESC LIMIT 1').first<{measured_on:string;centimeters:number}>();
+    const fuel_deliveries=user.role==='admin'?(await env.DB.prepare('SELECT id,delivered_on,liters,cost_cents,note FROM fuel_deliveries ORDER BY delivered_on DESC LIMIT 500').all()).results:[];
     const accessible=new Set(a.filter(x=>!own||own.includes(x.id)).map(x=>x.code));
-    return response(req,env,{role:user.role,email:user.email,my_apartments:[...accessible],apartments:a.filter(x=>accessible.has(x.code)),expenses:user.role==='admin'?es:es.map(e=>({...e,description:''})),payments:ps.filter(x=>accessible.has(x.apartment_code)),readings:rs.filter(x=>accessible.has(x.apartment_code)),tank});
+    return response(req,env,{role:user.role,email:user.email,my_apartments:[...accessible],apartments:a.filter(x=>accessible.has(x.code)),expenses:user.role==='admin'?es:[],fuel_deliveries,payments:ps.filter(x=>accessible.has(x.apartment_code)),readings:rs.filter(x=>accessible.has(x.apartment_code)),tank});
    }
    if(user.role!=='admin')return fail(req,env,'Δεν έχετε δικαίωμα καταχώρισης.',403);
    if(path==='/api/expenses'&&method==='POST'){
