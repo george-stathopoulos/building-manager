@@ -86,6 +86,19 @@ export default {
     const rows=(await env.DB.prepare('SELECT month,address,method,items_json,names_json,created_at,updated_at FROM monthly_statements ORDER BY month DESC').all()).results;
     return response(req,env,{statements:rows.map((r:any)=>({month:r.month,address:r.address,method:r.method,items:JSON.parse(r.items_json),names:JSON.parse(r.names_json),created_at:r.created_at,updated_at:r.updated_at}))});
    }
+   if(path==='/api/statements/payments'&&method==='GET'){
+    const month=url.searchParams.get('month');
+    if(!validMonth(month))return fail(req,env,'Επιλέξτε έγκυρο μήνα.');
+    const statement=await env.DB.prepare('SELECT month,items_json,method FROM monthly_statements WHERE month=?').bind(month).first<{month:string;items_json:string;method:string}>();
+    if(!statement)return fail(req,env,'Η κατάσταση κοινοχρήστων δεν βρέθηκε.',404);
+    const own=await myApartmentIds(env,user);
+    const apartments=(await env.DB.prepare('SELECT id,code,common_weight,heating_share_bp FROM apartments ORDER BY code').all<Apartment>()).results;
+    const items=JSON.parse(statement.items_json) as Array<{name:string;amount_cents:number}>;
+    const total=items.reduce((sum,item)=>sum+item.amount_cents,0);
+    const due=allocate(total,apartments,statement.method);
+    const paid=(await env.DB.prepare('SELECT apartment_id,paid_cents,paid_on FROM statement_payments WHERE month=?').bind(month).all<{apartment_id:string;paid_cents:number;paid_on:string|null}>()).results;
+    return response(req,env,{month,apartments:apartments.filter(a=>!own||own.includes(a.id)).map(a=>{const i=apartments.findIndex(x=>x.id===a.id);const payment=paid.find(x=>x.apartment_id===a.id);const paidCents=payment?.paid_cents||0;return {apartment_code:a.code,due_cents:due[i],paid_cents:paidCents,balance_cents:Math.max(0,due[i]-paidCents),paid_on:payment?.paid_on||null,status:paidCents>=due[i]?'paid':paidCents>0?'partial':'unpaid'};})});
+   }
    if(path==='/api/statements/revisions'&&method==='GET'){
     if(user.role!=='admin')return fail(req,env,'Δεν επιτρέπεται.',403);
     const rows=(await env.DB.prepare('SELECT month,created_at,actor_id,old_json,new_json FROM statement_revisions ORDER BY created_at DESC LIMIT 100').all()).results;
