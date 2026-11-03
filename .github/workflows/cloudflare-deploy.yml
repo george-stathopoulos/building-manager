@@ -1,5 +1,5 @@
 name: Ανάπτυξη Cloudflare API
-# Re-run to synchronize updated ADMIN_SETUP_KEY
+# Re-run to synchronize rotated ADMIN_SETUP_KEY (2026-11-03)
 on:
   workflow_dispatch:
   push:
