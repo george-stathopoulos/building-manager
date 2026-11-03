@@ -126,6 +126,20 @@ export default {
     ]);
     return response(req,env,{id,allocations:apartments.map((a,i)=>({apartment_code:a.code,amount_cents:allocations[i]}))},201);
    }
+   if(path==='/api/payments/update'&&method==='POST'){
+    const b=await jsonBody(req);
+    if(typeof b.id!=='string'||b.id.length>100||typeof b.apartment_code!=='string'||!['common','heating'].includes(String(b.kind))||!cents(b.amount_cents)||!validDate(b.paid_on))return fail(req,env,'Ελέγξτε τα στοιχεία της πληρωμής.');
+    const before=await env.DB.prepare('SELECT p.id,p.apartment_id,a.code AS apartment_code,p.kind,p.amount_cents,p.paid_on FROM payments p JOIN apartments a ON a.id=p.apartment_id WHERE p.id=?').bind(b.id).first();
+    if(!before)return fail(req,env,'Η πληρωμή δεν βρέθηκε.',404);
+    const apartment=await env.DB.prepare('SELECT id FROM apartments WHERE code=?').bind(b.apartment_code).first<{id:string}>();
+    if(!apartment)return fail(req,env,'Άγνωστο διαμέρισμα.');
+    const after={apartment_code:b.apartment_code,kind:b.kind,amount_cents:b.amount_cents,paid_on:b.paid_on};
+    await env.DB.batch([
+      env.DB.prepare('UPDATE payments SET apartment_id=?,kind=?,amount_cents=?,paid_on=? WHERE id=?').bind(apartment.id,b.kind,b.amount_cents,b.paid_on,b.id),
+      audit(env,user.id,'payment_updated','payment',b.id,{before,after})
+    ]);
+    return response(req,env,{ok:true,updated:true});
+   }
    if(path==='/api/payments'&&method==='POST'){
     const b=await jsonBody(req);if(typeof b.apartment_code!=='string'||!['common','heating'].includes(String(b.kind))||!cents(b.amount_cents)||!validDate(b.paid_on))return fail(req,env,'Ελέγξτε τα στοιχεία πληρωμής.');
     const a=await env.DB.prepare('SELECT id FROM apartments WHERE code=?').bind(b.apartment_code).first<{id:string}>();
