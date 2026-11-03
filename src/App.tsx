@@ -20,7 +20,7 @@ function App(){
 
  const [month,setMonth]=useState(nowMonth());
  const categories=['ΚΑΘΑΡΙΣΜΟΣ ΚΤΙΡΙΟΥ ΚΑΙ ΚΟΙΝΟΧΡΗΣΤΩΝ ΧΩΡΩΝ','ΗΛΕΚΤΡΙΚΟ ΚΟΙΝΟΧΡΗΣΤΩΝ','ΚΗΠΟΥΡΟΣ','ΑΜΟΙΒΗ - ΠΡΟΓΡΑΜΜΑ ΚΟΙΝΟΧΡΗΣΤΩΝ'];
- const [charges,setCharges]=useState(categories.map(name=>({name,enabled:false,value:''})));
+ const [charges,setCharges]=useState(categories.map((name,i)=>({name,enabled:i!==1,value:i===0||i===2?'50':i===3?'10':''})));
  const [buildingAddress,setBuildingAddress]=useState('ΣΑΜΟΥ 4 ΜΑΡΟΥΣΙ');
  const [allocationMethod,setAllocationMethod]=useState<'equal'|'shares'>('equal');
  const [residentNames,setResidentNames]=useState<Record<string,string>>({'A1':'ΕΛΕΝΗ','A2':'ΜΠΙΤΑ ΚΩΝ/ΝΑ','A3':'ΣΤΑΘΟΠΟΥΛΟΣ','B1':'ΣΕΡΑΦΕΙΜ','B2':'ΚΩΝΣΤΑΝΤΙΝΑ ΜΑΡΙΑ','B3':'ΜΠΙΤΑΣ ΓΡΗΓΟΡΗΣ'});
