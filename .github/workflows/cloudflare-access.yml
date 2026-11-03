@@ -1,0 +1,38 @@
+name: Έλεγχος πρόσβασης Cloudflare
+on:
+  workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/cloudflare-access.yml'
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    env:
+      HAS_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN != '' }}
+      HAS_ACCOUNT: ${{ vars.CLOUDFLARE_ACCOUNT_ID != '' }}
+    steps:
+      - name: Επιβεβαίωση ρυθμίσεων
+        run: |
+          if [ "$HAS_TOKEN" != "true" ]; then
+            echo "::error::Missing CLOUDFLARE_API_TOKEN secret"
+            exit 1
+          fi
+          if [ "$HAS_ACCOUNT" != "true" ]; then
+            echo "::error::Missing CLOUDFLARE_ACCOUNT_ID variable"
+            exit 1
+          fi
+          echo "Both Cloudflare deployment settings are present."
+      - name: Έλεγχος διακριτικού Cloudflare
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          node -e '
+          (async()=>{
+            const r=await fetch("https://api.cloudflare.com/client/v4/user/tokens/verify",{headers:{Authorization:"Bearer "+process.env.CLOUDFLARE_API_TOKEN}});
+            const j=await r.json();
+            if(!r.ok||!j.success||j.result?.status!=="active"){console.error("::error::Cloudflare token could not be verified");process.exit(1);}
+            console.log("Cloudflare token is active.");
+          })().catch(()=>{console.error("::error::Cloudflare verification request failed");process.exit(1);});
+          '
