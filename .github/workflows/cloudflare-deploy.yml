@@ -1,6 +1,9 @@
 name: Ανάπτυξη Cloudflare API
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - '.github/workflows/cloudflare-deploy.yml'
 permissions:
   contents: read
   actions: write
