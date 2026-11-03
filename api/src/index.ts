@@ -51,7 +51,7 @@ export default {
     await env.DB.prepare('DELETE FROM login_attempts WHERE email=?').bind(email).run();
     loginStage='session';
     return response(req,env,{token:await session(env,user.id)});
-    } catch(e) { console.error('Login stage:',loginStage,e instanceof Error?e.name:'unknown');return fail(req,env,'Σφάλμα σύνδεσης ('+loginStage+').',500); }
+    } catch(e) { console.error('Login stage:',loginStage,e instanceof Error?e.name:'unknown',e instanceof Error?e.message:'');return fail(req,env,'Σφάλμα σύνδεσης ('+loginStage+').',500); }
    }
    if(path==='/api/invitations/accept'&&method==='POST'){
     const b=await jsonBody(req);if(!validEmail(b.email)||typeof b.password!=='string'||b.password.length<12||b.password.length>128||typeof b.token!=='string'||!/^([a-f0-9]{64})$/.test(b.token))return fail(req,env,'Μη έγκυρα στοιχεία πρόσκλησης.');
