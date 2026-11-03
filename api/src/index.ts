@@ -27,7 +27,7 @@ export default {
   try{
    const url=new URL(req.url);const path=url.pathname;const method=req.method;
    if(!permittedOrigin(req,env))return fail(req,env,'Μη επιτρεπτή προέλευση.',403);
-   if(method==='OPTIONS')return response(req,env,{},204);
+   if(method==='OPTIONS')return new Response(null,{status:204,headers:{'Access-Control-Allow-Origin':req.headers.get('Origin')||env.WEB_ORIGIN,'Access-Control-Allow-Methods':'GET, POST, OPTIONS','Access-Control-Allow-Headers':'Content-Type, Authorization','Vary':'Origin'}});
    if(path==='/api/health'&&method==='GET')return response(req,env,{ok:true});
    if(path==='/api/bootstrap/status'&&method==='GET'){const r=await env.DB.prepare('SELECT COUNT(*) AS n FROM users').first<{n:number}>();return response(req,env,{configured:(r?.n||0)>0});}
    if(path==='/api/bootstrap'&&method==='POST'){
