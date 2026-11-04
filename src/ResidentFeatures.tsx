@@ -22,12 +22,12 @@ const fmtHours=(hours:number)=>hours.toLocaleString('el-GR',{maximumFractionDigi
 
 export function FuelAccountSummary({account,compact=false}:{account:FuelAccountView|null|undefined;compact?:boolean}){
  if(!account)return <p className="muted">Δεν υπάρχουν ακόμη στοιχεία κατανάλωσης θέρμανσης.</p>;
- return <div className="fuel-account-summary"><p className="fuel-settled-banner">✓ Ιστορική κατανάλωση: εξοφλημένη · Οφειλή 0,00 €</p>
+ return <div className="fuel-account-summary"><p className="fuel-settled-banner">Ιστορική περίοδος: κλειστή · Δεν μεταφέρονται παλαιές οφειλές</p>
   <div className="fuel-metrics">
-   <article><small>Μεταφερόμενο υπόλοιπο θέρμανσης</small><strong>{account.opening?money(Math.max(0,account.opening.deposited_cents-account.opening.estimated_consumed_cents)):'—'}</strong><span>{account.opening?'Αχρησιμοποίητη πίστωση από προηγούμενη περίοδο':'Δεν έχει επιβεβαιωθεί αρχική πίστωση'}</span></article>
+   <article><small>Μεταφερόμενη πίστωση θέρμανσης</small><strong>{account.opening?money(Math.max(0,account.opening.deposited_cents-account.opening.estimated_consumed_cents)):'—'}</strong><span>{account.opening?'Πίστωση από το ιστορικό αρχείο, προς συμφωνία με τα πραγματικά παραστατικά':'Δεν έχει επιβεβαιωθεί αρχική πίστωση'}</span></article>
    <article><small>Νέες καταθέσεις</small><strong>{account.opening&&account.deposits_cents!==null?money(Math.max(0,account.deposits_cents-account.opening.deposited_cents)):'—'}</strong><span>Πληρωμές μετά τη μεταφορά υπολοίπου</span></article>
-   <article><small>Νέο εκτιμώμενο κόστος</small><strong>{money(account.estimated_cost_cents)}</strong><span>Εκτίμηση από κατανάλωση, όχι τιμολόγιο</span></article>
-   <article><small>Διαθέσιμο υπόλοιπο θέρμανσης (εκτ.)</small><strong>{account.estimated_balance_cents===null?'—':money(account.estimated_balance_cents)}</strong><span>{account.estimated_balance_cents===null?'Απαιτείται επιβεβαίωση αρχικού υπολοίπου':'Δεν αποτελεί βεβαιωμένη οφειλή'}</span></article>
+   <article><small>Εκτιμώμενη νέα κατανάλωση (€)</small><strong>{money(account.estimated_cost_cents)}</strong><span>Εκτίμηση από κατανάλωση, όχι τιμολόγιο</span></article>
+   <article><small>Υπόλοιπο πίστωσης θέρμανσης</small><strong>{account.estimated_balance_cents===null?'—':money(account.estimated_balance_cents)}</strong><span>{account.estimated_balance_cents===null?'Απαιτείται επιβεβαίωση αρχικού υπολοίπου':'Μεταφερόμενη πίστωση + νέες πληρωμές − εκτιμώμενη νέα κατανάλωση'}</span></article>
    <article><small>Εκτιμώμενες ώρες που απομένουν</small><strong>{account.remaining_hours===null?'—':fmtHours(account.remaining_hours)}</strong><span>Με εκτιμώμενη τιμή ανά ώρα από διαθέσιμες μετρήσεις του διαμερίσματος</span></article>
    <article><small>Νέες ώρες λειτουργίας</small><strong>{fmtHours(account.hours)}</strong><span>Μόνο διαφορές μεταξύ ενδείξεων</span></article>
    <article><small>Νέα εκτιμώμενα λίτρα</small><strong>{account.estimated_liters.toLocaleString('el-GR',{maximumFractionDigits:2})} L</strong><span>Από μεταβολές δεξαμενής, με επιμερισμό ανά ώρες</span></article>
