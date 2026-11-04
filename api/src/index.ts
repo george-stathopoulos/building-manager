@@ -232,10 +232,22 @@ export default {
     return response(req,env,{events:events.map((x:any)=>({...x,details:JSON.parse(x.details)}))});
    }
    if(path==='/api/payment-declarations'&&method==='GET'){
-    const rows=(await env.DB.prepare("SELECT d.id,a.code AS apartment_code,d.kind,d.month,d.amount_cents,d.declared_on,d.status,d.created_at,d.reviewed_at FROM payment_declarations d JOIN apartments a ON a.id=d.apartment_id ORDER BY CASE WHEN d.status='pending' THEN 0 ELSE 1 END,d.created_at DESC LIMIT 300").all<{id:string;apartment_code:string;kind:string;month:string|null;amount_cents:number;declared_on:string;status:string;created_at:string;reviewed_at:string|null}>()).results;
+    const rows=(await env.DB.prepare("SELECT d.id,a.code AS apartment_code,d.kind,d.month,d.amount_cents,d.declared_on,d.status,d.created_at,d.reviewed_at,CASE WHEN n.declaration_id IS NOT NULL THEN 1 ELSE 0 END AS notification_read FROM payment_declarations d JOIN apartments a ON a.id=d.apartment_id LEFT JOIN payment_notification_reads n ON n.declaration_id=d.id AND n.apartment_id=d.apartment_id ORDER BY CASE WHEN d.status='pending' THEN 0 ELSE 1 END,d.created_at DESC LIMIT 300").all<{id:string;apartment_code:string;kind:string;month:string|null;amount_cents:number;declared_on:string;status:string;created_at:string;reviewed_at:string|null;notification_read:number}>()).results;
     const own=canReview?null:await myApartmentIds(env,user);
     const allowed=own?new Set((await env.DB.prepare('SELECT id,code FROM apartments').all<{id:string;code:string}>()).results.filter(a=>own.includes(a.id)).map(a=>a.code)):null;
-    return response(req,env,{declarations:rows.filter(x=>!allowed||allowed.has(x.apartment_code))});
+    const declarations=rows.filter(x=>!allowed||allowed.has(x.apartment_code));
+    return response(req,env,{declarations,unread_payment_count:canReview?0:declarations.filter(x=>x.status!=='pending'&&!x.notification_read).length});
+   }
+   if(path==='/api/payment-declarations/mark-read'&&method==='POST'){
+    const b=await jsonBody(req);
+    if(!Array.isArray(b.ids)||b.ids.length>100||b.ids.some((id:unknown)=>typeof id!=='string'||id.length>100))return fail(req,env,'Μη έγκυρες ειδοποιήσεις.');
+    const own=await myApartmentIds(env,user);
+    if(!own?.length)return fail(req,env,'Δεν βρέθηκε διαμέρισμα.',403);
+    const rows=(await env.DB.prepare("SELECT d.id,d.apartment_id FROM payment_declarations d WHERE d.status!='pending'").all<{id:string;apartment_id:string}>()).results;
+    const ids=new Set(b.ids as string[]);
+    const allowed=rows.filter(x=>ids.has(x.id)&&own.includes(x.apartment_id));
+    if(allowed.length)await env.DB.batch(allowed.map(x=>env.DB.prepare('INSERT OR IGNORE INTO payment_notification_reads(declaration_id,apartment_id,read_at) VALUES(?,?,?)').bind(x.id,x.apartment_id,iso())));
+    return response(req,env,{ok:true});
    }
    if(path==='/api/payment-declarations'&&method==='POST'){
     const b=await jsonBody(req);
