@@ -513,6 +513,7 @@ export default {
     return response(req,env,{ok:true});
    }
    if(path==='/api/payments/delete'&&method==='POST'){
+    if(user.role!=='admin')return fail(req,env,'Δεν επιτρέπεται.',403);
     const b=await jsonBody(req);
     if(typeof b.id!=='string'||b.id.length>100)return fail(req,env,'Μη έγκυρη πληρωμή.');
     const payment=await env.DB.prepare('SELECT p.id,a.code AS apartment_code,p.kind,p.amount_cents,p.paid_on,p.source_declaration_id FROM payments p JOIN apartments a ON a.id=p.apartment_id WHERE p.id=?').bind(b.id).first<{id:string;apartment_code:string;kind:string;amount_cents:number;paid_on:string;source_declaration_id:string|null}>();
