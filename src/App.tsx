@@ -32,6 +32,7 @@ function ResidentMonthExpense({month,code,due,paid,balance}:{month:string;code:s
 function App(){
  const [tab,setTab]=useState<Tab>('home');
  const [data,setData]=useState<Overview|null>(configured?null:demo);
+ const [restoringSession,setRestoringSession]=useState(configured&&authenticated());
  const [status,setStatus]=useState('');
  const [loading,setLoading]=useState(false);
  const [isConfigured,setIsConfigured]=useState<boolean|null>(null);
@@ -131,7 +132,7 @@ function App(){
  const [inviteApartment,setInviteApartment]=useState('A1');
  const [residentPassword,setResidentPassword]=useState('');
  async function refresh(){try{const account=await request<{must_change:boolean}>('/account');if(account.must_change){setMustChangePin(true);setTab('account');return;}setMustChangePin(false);const x=await request<Overview>('/overview');setData(x);setStatus('');if(x.role==='admin'){await Promise.all([loadStatements(),loadPaymentSummaries(),loadFuelAccounts(),loadAnnouncements()]);await loadAudit();}else{setSavedStatements([]);await Promise.all([loadPaymentSummaries(),loadFuelAccounts(),loadAnnouncements()]);}}catch(e){setStatus((e as Error).message);}}
- useEffect(()=>{if(!configured)return;request<{configured:boolean}>('/bootstrap/status').then(r=>setIsConfigured(r.configured)).catch(()=>setIsConfigured(null));if(authenticated())refresh();},[]);
+ useEffect(()=>{if(!configured)return;request<{configured:boolean}>('/bootstrap/status').then(r=>setIsConfigured(r.configured)).catch(()=>setIsConfigured(null));if(authenticated()){void refresh().finally(()=>setRestoringSession(false));}else{setRestoringSession(false);}},[]);
  useEffect(()=>{if(authenticated()&&selectedPaymentMonth)loadStatementPayments(selectedPaymentMonth);},[selectedPaymentMonth]);
  // Refresh unread announcement counts when a resident returns to the installed PWA.
  useEffect(()=>{
@@ -187,6 +188,7 @@ function App(){
  const totalFuelCost=fuelDeliveries.reduce((n,x)=>n+x.cost_cents,0)/100;
  const isAdmin=data?.role==='admin';
  const selectedFuelAccount=fuelAccounts?.accounts.find(a=>a.apartment_code===fuelEditAccount);
+ if(restoringSession)return <main className="auth-page session-restore" role="status" aria-live="polite"><section className="auth-card session-restore-card"><div className="brand-mark">⌂</div><div className="session-restore-spinner" aria-hidden="true"/><h1>Η Πολυκατοικία</h1><p className="muted">Φόρτωση του λογαριασμού σας…</p></section></main>;
  if(configured&&!data&&!mustChangePin)return <main className="auth-page"><section className="auth-card">
  <div className="brand-mark">⌂</div><h1>Διαχείριση Πολυκατοικίας</h1><p className="muted">Ασφαλής πρόσβαση διαχειριστή και κατοίκων</p>
  {isConfigured===false&&<div className="notice">Ο λογαριασμός διαχειριστή δεν έχει ενεργοποιηθεί ακόμη.</div>}
