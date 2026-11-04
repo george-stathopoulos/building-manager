@@ -268,7 +268,7 @@ export default {
     if(!validDate(b.original_date)||!validDate(b.measured_on)||typeof b.centimeters!=='number'||!Number.isFinite(b.centimeters)||b.centimeters<0||b.centimeters>10000||!Array.isArray(b.readings))return fail(req,env,'Ελέγξτε την ημερομηνία και τις μετρήσεις.');
     const apartments=(await env.DB.prepare('SELECT id,code FROM apartments ORDER BY code').all<{id:string;code:string}>()).results;
     const readings=b.readings as Array<{apartment_code:string;reading:number}>;
-    if(readings.length!==apartments.length||new Set(readings.map(x=>x.apartment_code)).size!==apartments.length||readings.some(x=>!apartments.some(a=>a.code===x.apartment_code)||!Number.isSafeInteger(x.reading)||x.reading<0))return fail(req,env,'Απαιτούνται έγκυρες μετρήσεις για όλα τα διαμερίσματα.');
+    if(readings.length!==apartments.length||new Set(readings.map(x=>x.apartment_code)).size!==apartments.length||readings.some(x=>!apartments.some(a=>a.code===x.apartment_code)||!(Number.isFinite(x.reading)&&Math.round(x.reading*100)===x.reading*100)||x.reading<0))return fail(req,env,'Απαιτούνται έγκυρες μετρήσεις για όλα τα διαμερίσματα.');
     const original=await env.DB.prepare('SELECT id,centimeters,measured_on FROM tank_measurements WHERE measured_on=?').bind(b.original_date).first<{id:string;centimeters:number;measured_on:string}>();
     if(!original)return fail(req,env,'Η μέτρηση προς διόρθωση δεν βρέθηκε.',404);
     if(b.measured_on!==b.original_date){
