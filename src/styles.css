@@ -238,3 +238,18 @@ body{background:var(--bm-canvas)}button{transition:background .18s ease,transfor
  .panel,.resident-card{padding:17px 14px}.fuel-insights-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
 }
 @media(prefers-reduced-motion:reduce){*,*::before,*::after{transition-duration:.01ms!important;animation-duration:.01ms!important}}
+
+/* Contrast regression fix: earlier light-hero text rules must not override dark hero surfaces. */
+.resident-shell .resident-home-hero{background:#103d46;color:#ffffff}
+.resident-shell .resident-home-hero>span{color:#b9f5e7;font-size:12px;font-weight:800;letter-spacing:.1em}
+.resident-shell .resident-home-hero h2{color:#ffffff;font-weight:800;text-shadow:none}
+.resident-shell .resident-home-hero p{color:#e5f5f3;font-weight:500}
+.shell .welcome{background:#103d46;color:#ffffff}
+.shell .welcome .eyebrow{color:#b9f5e7}
+.shell .welcome h2{color:#ffffff}
+.shell .welcome p{color:#e5f5f3}
+.sidebar .logo strong{color:#ffffff}.sidebar .logo small{color:#c5dce0}
+.resident-shell .resident-portal-card{color:#173b46}
+.resident-shell .resident-portal-name{color:#163b45}
+.resident-shell .resident-portal-description{color:#45616c}
+.resident-shell .resident-portal-meta{color:#076d62}
