@@ -1,3 +1,4 @@
+import {calculateFuelAccounts,type FuelApartment,type FuelReading,type FuelTank,type FuelDelivery,type FuelPayment,type FuelOpening,type FuelSettings} from './fuel-model';
 interface Env {DB:D1Database; WEB_ORIGIN:string}
 type DbUser={id:string;email:string;role:'admin'|'resident';salt:string;password_hash:string};
 type Apartment={id:string;code:string;common_weight:number;heating_share_bp:number};
@@ -125,6 +126,47 @@ export default {
     const fuel_deliveries=user.role==='admin'?(await env.DB.prepare('SELECT id,delivered_on,liters,cost_cents,note FROM fuel_deliveries ORDER BY delivered_on DESC LIMIT 500').all()).results:[];
     const accessible=new Set(a.filter(x=>!own||own.includes(x.id)).map(x=>x.code));
     return response(req,env,{role:user.role,email:user.email,my_apartments:[...accessible],apartments:a.filter(x=>accessible.has(x.code)),expenses:user.role==='admin'?es:[],fuel_deliveries,payments:ps.filter(x=>accessible.has(x.apartment_code)),readings:rs.filter(x=>accessible.has(x.apartment_code)),tank:user.role==='admin'?tank:null,tank_history:user.role==='admin'?tank_history:[]});
+   }
+   if(path==='/api/fuel/accounts'&&method==='GET'){
+    const own=await myApartmentIds(env,user);
+    const apartments=(await env.DB.prepare('SELECT id,code,heating_share_bp FROM apartments ORDER BY code').all<FuelApartment>()).results;
+    const readings=(await env.DB.prepare('SELECT apartment_id,measured_on,reading FROM heating_readings ORDER BY measured_on').all<FuelReading>()).results;
+    const tank=(await env.DB.prepare('SELECT measured_on,centimeters FROM tank_measurements ORDER BY measured_on').all<FuelTank>()).results;
+    const deliveries=(await env.DB.prepare('SELECT delivered_on,liters FROM fuel_deliveries ORDER BY delivered_on').all<FuelDelivery>()).results;
+    const payments=(await env.DB.prepare("SELECT apartment_id,paid_on,amount_cents FROM payments WHERE kind='heating' ORDER BY paid_on").all<FuelPayment>()).results;
+    const openings=(await env.DB.prepare('SELECT apartment_id,as_of,deposited_cents,estimated_consumed_cents,note FROM fuel_openings').all<FuelOpening>()).results;
+    const settings=await env.DB.prepare('SELECT liters_per_cm,price_cents_per_liter FROM fuel_settings WHERE id=1').first<FuelSettings>();
+    if(!settings)return fail(req,env,'Δεν έχουν ενεργοποιηθεί ακόμη οι ρυθμίσεις θέρμανσης.',503);
+    const legacy=(await env.DB.prepare('SELECT apartment_id,as_of,reported_deposited_cents,reported_estimated_consumed_cents FROM fuel_legacy_snapshots').all<{apartment_id:string;as_of:string;reported_deposited_cents:number;reported_estimated_consumed_cents:number}>()).results;
+    const model=calculateFuelAccounts({apartments,readings,tank,deliveries,payments,openings,settings});
+    const visible=apartments.filter(a=>!own||own.includes(a.id));
+    return response(req,env,{
+     settings,
+     accounts:model.accounts.filter(a=>visible.some(v=>v.code===a.apartment_code)).map(a=>({
+      ...a,legacy:legacy.find(x=>visible.some(v=>v.code===a.apartment_code&&v.id===x.apartment_id))||null
+     })),
+     excluded:model.excluded,period_count:model.periodCount,
+     note:'Υπολογισμοί κατά προσέγγιση. Δεν αποτελούν χρεώσεις ή απλήρωτα τιμολόγια. Στην ίδια ημερομηνία, ο ανεφοδιασμός θεωρείται ότι έγινε μετά τη μέτρηση δεξαμενής.'
+    });
+   }
+   if(path==='/api/announcements'&&method==='GET'){
+    const own=await myApartmentIds(env,user);
+    const apartmentId=own?.[0]||null;
+    const all=(await env.DB.prepare('SELECT id,title,body,published_at,created_at,archived_at FROM announcements ORDER BY published_at DESC LIMIT 100').all<{id:string;title:string;body:string;published_at:string;created_at:string;archived_at:string|null}>()).results;
+    const reads=apartmentId?(await env.DB.prepare('SELECT announcement_id FROM announcement_reads WHERE apartment_id=?').bind(apartmentId).all<{announcement_id:string}>()).results.map(x=>x.announcement_id):[];
+    const announcements=all.filter(a=>user.role==='admin'||!a.archived_at).map(a=>({...a,read:user.role==='admin'||reads.includes(a.id)}));
+    return response(req,env,{announcements,unread_count:announcements.filter(a=>!a.read).length});
+   }
+   if(path==='/api/announcements/read'&&method==='POST'){
+    if(user.role==='admin')return response(req,env,{ok:true});
+    const b=await jsonBody(req);
+    if(typeof b.id!=='string'||b.id.length>100)return fail(req,env,'Μη έγκυρη ανακοίνωση.');
+    const announcement=await env.DB.prepare('SELECT id FROM announcements WHERE id=? AND archived_at IS NULL').bind(b.id).first();
+    if(!announcement)return fail(req,env,'Η ανακοίνωση δεν βρέθηκε.',404);
+    const own=await myApartmentIds(env,user);
+    if(!own?.length)return fail(req,env,'Δεν βρέθηκε διαμέρισμα.',403);
+    await env.DB.batch(own.map(apartmentId=>env.DB.prepare('INSERT OR IGNORE INTO announcement_reads(announcement_id,apartment_id,read_at) VALUES(?,?,?)').bind(b.id,apartmentId,iso())));
+    return response(req,env,{ok:true});
    }
    if(path==='/api/statements'&&method==='GET'){
     if(user.role!=='admin')return fail(req,env,'Δεν επιτρέπεται η προβολή των συνολικών καταστάσεων.',403);
@@ -256,6 +298,57 @@ export default {
      audit(env,user.id,'expense_created','expense',id,{amount_cents:b.amount_cents,month:b.month,method:b.method})
     ]);
     return response(req,env,{id,allocations:apartments.map((a,i)=>({apartment_code:a.code,amount_cents:allocations[i]}))},201);
+   }
+   if(path==='/api/fuel/settings'&&method==='POST'){
+    const b=await jsonBody(req);
+    if(typeof b.liters_per_cm!=='number'||!Number.isFinite(b.liters_per_cm)||b.liters_per_cm<=0||b.liters_per_cm>1000||
+       typeof b.price_cents_per_liter!=='number'||!Number.isSafeInteger(b.price_cents_per_liter)||b.price_cents_per_liter<=0||b.price_cents_per_liter>100000)
+     return fail(req,env,'Ελέγξτε τον συντελεστή λίτρων/εκ. και την τιμή πετρελαίου.');
+    const before=await env.DB.prepare('SELECT liters_per_cm,price_cents_per_liter FROM fuel_settings WHERE id=1').first();
+    await env.DB.batch([
+     env.DB.prepare('UPDATE fuel_settings SET liters_per_cm=?,price_cents_per_liter=?,updated_by=?,updated_at=? WHERE id=1').bind(b.liters_per_cm,b.price_cents_per_liter,user.id,iso()),
+     audit(env,user.id,'fuel_settings_updated','fuel_settings','1',{before,after:{liters_per_cm:b.liters_per_cm,price_cents_per_liter:b.price_cents_per_liter}})
+    ]);
+    return response(req,env,{ok:true});
+   }
+   if(path==='/api/fuel/opening'&&method==='POST'){
+    const b=await jsonBody(req);
+    const validNonNegative=(v:unknown)=>typeof v==='number'&&Number.isSafeInteger(v)&&v>=0&&v<=1000000000;
+    if(typeof b.apartment_code!=='string'||!validDate(b.as_of)||!validNonNegative(b.deposited_cents)||!validNonNegative(b.estimated_consumed_cents)||typeof b.note!=='string'||b.note.length>300)
+     return fail(req,env,'Ελέγξτε τα στοιχεία αρχικού υπολοίπου.');
+    if(b.as_of>iso().slice(0,10))return fail(req,env,'Η ημερομηνία βάσης δεν μπορεί να είναι μελλοντική.');
+    const apt=await env.DB.prepare('SELECT id FROM apartments WHERE code=?').bind(b.apartment_code).first<{id:string}>();
+    if(!apt)return fail(req,env,'Άγνωστο διαμέρισμα.');
+    const measured=await env.DB.prepare('SELECT id FROM tank_measurements WHERE measured_on=?').bind(b.as_of).first();
+    if(!measured)return fail(req,env,'Επιλέξτε ημερομηνία που έχει ήδη μετρήσεις θέρμανσης και δεξαμενής.');
+    const before=await env.DB.prepare('SELECT * FROM fuel_openings WHERE apartment_id=?').bind(apt.id).first();
+    await env.DB.batch([
+     env.DB.prepare('INSERT INTO fuel_openings(apartment_id,as_of,deposited_cents,estimated_consumed_cents,note,confirmed_by,confirmed_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(apartment_id) DO UPDATE SET as_of=excluded.as_of,deposited_cents=excluded.deposited_cents,estimated_consumed_cents=excluded.estimated_consumed_cents,note=excluded.note,confirmed_by=excluded.confirmed_by,confirmed_at=excluded.confirmed_at').bind(apt.id,b.as_of,b.deposited_cents,b.estimated_consumed_cents,b.note,user.id,iso()),
+     audit(env,user.id,'fuel_opening_reconciled','apartment',apt.id,{before,after:{as_of:b.as_of,deposited_cents:b.deposited_cents,estimated_consumed_cents:b.estimated_consumed_cents,note:b.note}})
+    ]);
+    return response(req,env,{ok:true});
+   }
+   if(path==='/api/announcements'&&method==='POST'){
+    const b=await jsonBody(req);
+    if(typeof b.title!=='string'||typeof b.body!=='string'||!b.title.trim()||!b.body.trim()||b.title.trim().length>120||b.body.trim().length>5000)
+     return fail(req,env,'Συμπληρώστε τίτλο και κείμενο ανακοίνωσης (έως 120 και 5.000 χαρακτήρες).');
+    const id=uuid(),timestamp=iso();
+    await env.DB.batch([
+     env.DB.prepare('INSERT INTO announcements(id,title,body,published_at,created_by,created_at) VALUES(?,?,?,?,?,?)').bind(id,b.title.trim(),b.body.trim(),timestamp,user.id,timestamp),
+     audit(env,user.id,'announcement_published','announcement',id,{title:b.title.trim()})
+    ]);
+    return response(req,env,{ok:true,id},201);
+   }
+   if(path==='/api/announcements/archive'&&method==='POST'){
+    const b=await jsonBody(req);
+    if(typeof b.id!=='string'||b.id.length>100)return fail(req,env,'Μη έγκυρη ανακοίνωση.');
+    const target=await env.DB.prepare('SELECT id,title FROM announcements WHERE id=? AND archived_at IS NULL').bind(b.id).first<{id:string;title:string}>();
+    if(!target)return fail(req,env,'Η ανακοίνωση δεν βρέθηκε ή έχει ήδη αρχειοθετηθεί.',404);
+    await env.DB.batch([
+     env.DB.prepare('UPDATE announcements SET archived_at=? WHERE id=? AND archived_at IS NULL').bind(iso(),b.id),
+     audit(env,user.id,'announcement_archived','announcement',b.id,{title:target.title})
+    ]);
+    return response(req,env,{ok:true});
    }
    if(path==='/api/payments/update'&&method==='POST'){
     const b=await jsonBody(req);
