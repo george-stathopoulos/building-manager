@@ -304,6 +304,29 @@ export default {
     if(result[0].meta.changes!==1)return fail(req,env,'Το αίτημα έχει ήδη εξεταστεί.',409);
     return response(req,env,{ok:true});
    }
+   if(path==='/api/payment-declarations/reverse'&&method==='POST'){
+    if(user.role!=='admin')return fail(req,env,'Μόνο ο διαχειριστής μπορεί να αναιρέσει πληρωμές.',403);
+    const b=await jsonBody(req);
+    if(typeof b.id!=='string'||typeof b.reason!=='string'||b.reason.trim().length<5||b.reason.length>500)return fail(req,env,'Απαιτείται αιτιολογία (τουλάχιστον 5 χαρακτήρες).');
+    const d=await env.DB.prepare("SELECT d.*,a.code AS apartment_code FROM payment_declarations d JOIN apartments a ON a.id=d.apartment_id WHERE d.id=?").bind(b.id).first<{id:string;apartment_id:string;apartment_code:string;kind:string;month:string|null;amount_cents:number;status:string}>();
+    if(!d)return fail(req,env,'Η πληρωμή δεν βρέθηκε.',404);
+    if(d.status!=='confirmed')return fail(req,env,'Μόνο επιβεβαιωμένες πληρωμές μπορούν να αναιρεθούν.',409);
+    const now=iso(),writes:D1PreparedStatement[]=[];
+    if(d.kind==='heating'){
+     const deposit=await env.DB.prepare('SELECT id FROM payments WHERE source_declaration_id=?').bind(d.id).first<{id:string}>();
+     if(!deposit)return fail(req,env,'Η πίστωση θέρμανσης δεν βρέθηκε. Δεν έγινε αναίρεση.',409);
+     writes.push(env.DB.prepare('DELETE FROM payments WHERE source_declaration_id=?').bind(d.id));
+    }else if(d.kind==='common'&&d.month){
+     const current=await env.DB.prepare('SELECT paid_cents FROM statement_payments WHERE month=? AND apartment_id=?').bind(d.month,d.apartment_id).first<{paid_cents:number}>();
+     if(!current||current.paid_cents<=0)return fail(req,env,'Η εξόφληση έχει ήδη τροποποιηθεί. Δεν έγινε αναίρεση.',409);
+     writes.push(env.DB.prepare("UPDATE statement_payments SET paid_cents=0,paid_on=NULL,updated_by=?,updated_at=? WHERE month=? AND apartment_id=?").bind(user.id,now,d.month,d.apartment_id));
+    }
+    writes.push(env.DB.prepare("UPDATE payment_declarations SET status='reversed',reviewed_by=?,reviewed_at=? WHERE id=? AND status='confirmed'").bind(user.id,now,d.id));
+    writes.push(env.DB.prepare('DELETE FROM payment_notification_reads WHERE declaration_id=?').bind(d.id));
+    writes.push(audit(env,user.id,'payment_confirmation_reversed','payment_declaration',d.id,{apartment_code:d.apartment_code,kind:d.kind,month:d.month,amount_cents:d.amount_cents,reason:b.reason.trim()}));
+    await env.DB.batch(writes);
+    return response(req,env,{ok:true});
+   }
    if(user.role!=='admin')return fail(req,env,'Δεν έχετε δικαίωμα καταχώρισης.',403);
    if(path==='/api/statements/payments/batch'&&method==='POST'){
     const b=await jsonBody(req);
