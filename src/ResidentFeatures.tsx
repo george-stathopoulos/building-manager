@@ -42,8 +42,8 @@ export function FuelAccountSummary({account,compact=false}:{account:FuelAccountV
  </div>;
 }
 
-export function AnnouncementFeed({items,isAdmin,onRead,onArchive}:{
- items:AnnouncementView[];isAdmin:boolean;onRead:(id:string)=>void;onArchive:(id:string)=>void;
+export function AnnouncementFeed({items,isAdmin,onRead,onArchive,onDelete}:{
+ items:AnnouncementView[];isAdmin:boolean;onRead:(id:string)=>void;onArchive:(id:string)=>void;onDelete:(id:string)=>void;
 }){
  const [expanded,setExpanded]=useState<string|null>(null);
  const visible=items.filter(a=>isAdmin||!a.archived_at);
@@ -55,7 +55,7 @@ export function AnnouncementFeed({items,isAdmin,onRead,onArchive}:{
     {!a.read&&<span className="unread-dot" role="img" aria-label="Νέα ανακοίνωση"/>}
     {a.archived_at&&<span className="muted">Αρχειοθετημένη</span>}<span className="announcement-chevron" aria-hidden="true">{expanded===a.id?'⌃':'⌄'}</span>
    </button>
-   {expanded===a.id&&<div className="announcement-body"><p>{a.body}</p>{isAdmin&&!a.archived_at&&<button type="button" onClick={()=>onArchive(a.id)}>Αρχειοθέτηση</button>}</div>}
+   {expanded===a.id&&<div className="announcement-body"><p>{a.body}</p>{isAdmin&&<div className="announcement-admin-actions">{!a.archived_at&&<button type="button" onClick={()=>onArchive(a.id)}>Αρχειοθέτηση</button>}<button type="button" className="announcement-delete-button" onClick={()=>onDelete(a.id)}>Διαγραφή οριστικά</button></div>}</div>}
   </article>)}
   {!visible.length&&<p className="muted">Δεν υπάρχουν ανακοινώσεις ακόμη.</p>}
  </div>;
