@@ -63,6 +63,7 @@ jobs:
       - name: Έλεγχος σχήματος πληρωμών
         run: |
           npx wrangler d1 execute building-manager-db --remote --command "PRAGMA table_info(payments);"
+          npx wrangler d1 execute building-manager-db --remote --command "SELECT CASE WHEN COUNT(*)=1 THEN 1 ELSE 0 END AS source_column_present FROM pragma_table_info('payments') WHERE name='source_declaration_id';"
           npx wrangler d1 execute building-manager-db --remote --command "SELECT name FROM d1_migrations ORDER BY id DESC LIMIT 8;"
       - name: Δημοσίευση API
         run: npx wrangler deploy
