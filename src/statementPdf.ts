@@ -1,7 +1,7 @@
 /** Create a self-contained PDF using browser canvas so Greek text is rendered with the device fonts. */
 export async function saveStatementPdf(input:{address:string;month:string;apartment:string;items:{name:string;amount:string}[];total:string;due:string;paid:string;balance:string}):Promise<void>{
  const width=1240, height=1754, margin=90, line=43;
- const pages:HTMLCanvasElement[]=[];let canvas=document.createElement('canvas');let ctx=canvas.getContext('2d');if(!ctx)throw new Error('Δεν υποστηρίζεται η δημιουργία PDF σε αυτή τη συσκευή.');
+ const pages:HTMLCanvasElement[]=[];let canvas=document.createElement('canvas');const initialContext=canvas.getContext('2d');if(!initialContext)throw new Error('Δεν υποστηρίζεται η δημιουργία PDF σε αυτή τη συσκευή.');let ctx:CanvasRenderingContext2D=initialContext;
  let y=margin;
  const setup=()=>{canvas.width=width;canvas.height=height;ctx=canvas.getContext('2d')!;ctx.fillStyle='#fff';ctx.fillRect(0,0,width,height);ctx.fillStyle='#172333';ctx.textBaseline='top';y=margin;};
  const page=()=>{pages.push(canvas);canvas=document.createElement('canvas');setup();};
