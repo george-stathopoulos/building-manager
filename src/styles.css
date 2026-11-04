@@ -262,3 +262,8 @@ body{background:var(--bm-canvas)}button{transition:background .18s ease,transfor
 .session-restore-spinner{width:29px;height:29px;border:3px solid #d8ebe6;border-top-color:#087f79;border-radius:50%;animation:bm-session-spin .8s linear infinite}
 @keyframes bm-session-spin{to{transform:rotate(360deg)}}
 @media(prefers-reduced-motion:reduce){.session-restore-spinner{animation:none;border-top-color:#087f79}}
+
+/* Mobile app gesture behavior: avoid accidental double-tap zoom and iOS form focus zoom. */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+button,a,input,select,textarea,summary,[role="button"]{touch-action:manipulation}
+@media(pointer:coarse){input,select,textarea{font-size:max(16px,1rem)}}
