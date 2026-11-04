@@ -87,7 +87,7 @@ export function calculateFuelAccounts(input:Input):{accounts:FuelAccount[];exclu
    const newDeposits=input.payments.filter(p=>p.apartment_id===apt.id&&p.paid_on>account.opening!.as_of).reduce((n,p)=>n+p.amount_cents,0);
    account.deposits_cents=account.opening.deposited_cents+newDeposits;
    account.estimated_cost_cents+=account.opening.estimated_consumed_cents;
-   account.estimated_balance_cents=account.deposits_cents-account.estimated_cost_cents;
+   account.estimated_balance_cents=Math.max(0,account.deposits_cents-account.estimated_cost_cents);
   }
   if(allWeightedHours>0){
    account.estimated_hourly_cost_cents=Math.round(allFuelCost*apt.heating_share_bp/allWeightedHours*100)/100;
