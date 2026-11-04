@@ -12,6 +12,11 @@ function same(a:string,b:string){if(a.length!==b.length)return false;let diff=0;
 function permittedOrigin(req:Request,env:Env){const o=req.headers.get('Origin');return !o||o===env.WEB_ORIGIN||o==='http://localhost:5173';}
 function response(req:Request,env:Env,obj:unknown,status=200){const origin=req.headers.get('Origin');const headers=new Headers({'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Vary':'Origin'});if(origin&&permittedOrigin(req,env)){headers.set('Access-Control-Allow-Origin',origin);headers.set('Access-Control-Allow-Headers','Content-Type, Authorization');headers.set('Access-Control-Allow-Methods','GET, POST, OPTIONS');}return new Response(JSON.stringify(obj),{status,headers});}
 function fail(req:Request,env:Env,message:string,status=400){return response(req,env,{error:message},status);}
+function validPin(pin:unknown):pin is string{return typeof pin==='string'&&/^\\d{4}$/.test(pin);}
+function defaultPin(code:string){const i=['A1','A2','A3','B1','B2','B3'].indexOf(code);return i<0?null:String(i+1).padStart(4,'0');}
+type PinCredential={apartment_id:string;user_id:string;salt:string;pin_hash:string;must_change:number};
+async function pinCredential(env:Env,apartmentId:string){return env.DB.prepare('SELECT * FROM apartment_pin_credentials WHERE apartment_id=?').bind(apartmentId).first<PinCredential>();}
+async function replacePin(env:Env,apartmentId:string,userId:string,pin:string,mustChange:boolean){const salt=randomToken();await env.DB.prepare('INSERT INTO apartment_pin_credentials(apartment_id,user_id,salt,pin_hash,must_change,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(apartment_id) DO UPDATE SET salt=excluded.salt,pin_hash=excluded.pin_hash,must_change=excluded.must_change,updated_at=excluded.updated_at').bind(apartmentId,userId,salt,await hashPassword(pin,salt),mustChange?1:0,iso()).run();}
 function validEmail(v:unknown):v is string{return typeof v==='string'&&v.length<=254&&/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v);}
 function validDate(v:unknown):v is string{if(typeof v!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(v))return false;const d=new Date(v+'T00:00:00Z');return !Number.isNaN(d.getTime())&&d.toISOString().slice(0,10)===v;}
 function validMonth(v:unknown):v is string{return typeof v==='string'&&/^\d{4}-(0[1-9]|1[0-2])$/.test(v);}
@@ -53,6 +58,21 @@ export default {
     return response(req,env,{token:await session(env,user.id)});
     } catch(e) { console.error('Login stage:',loginStage,e instanceof Error?e.name:'unknown',e instanceof Error?e.message:'');return fail(req,env,'Σφάλμα σύνδεσης ('+loginStage+').',500); }
    }
+   if(path==='/api/pin/login'&&method==='POST'){
+    const b=await jsonBody(req);if(typeof b.apartment_code!=='string'||!validPin(b.pin))return fail(req,env,'Λανθασμένο διαμέρισμα ή PIN.',401);
+    const apt=await env.DB.prepare('SELECT id,code FROM apartments WHERE code=?').bind(b.apartment_code).first<{id:string;code:string}>();
+    if(!apt)return fail(req,env,'Λανθασμένο διαμέρισμα ή PIN.',401);
+    const cutoff=new Date(Date.now()-30*60000).toISOString();
+    const attempts=await env.DB.prepare('SELECT attempts,window_start FROM apartment_pin_attempts WHERE apartment_id=?').bind(apt.id).first<{attempts:number;window_start:string}>();
+    if(attempts&&attempts.window_start>cutoff&&attempts.attempts>=5)return fail(req,env,'Πολλές προσπάθειες. Δοκιμάστε ξανά σε 30 λεπτά.',429);
+    let cred=await pinCredential(env,apt.id);
+    const ok=cred?same(await hashPassword(b.pin,cred.salt),cred.pin_hash):b.pin===defaultPin(apt.code);
+    if(!ok){await env.DB.prepare('INSERT INTO apartment_pin_attempts(apartment_id,attempts,window_start) VALUES(?,?,?) ON CONFLICT(apartment_id) DO UPDATE SET attempts=excluded.attempts,window_start=excluded.window_start').bind(apt.id,attempts&&attempts.window_start>cutoff?attempts.attempts+1:1,attempts&&attempts.window_start>cutoff?attempts.window_start:iso()).run();return fail(req,env,'Λανθασμένο διαμέρισμα ή PIN.',401);}
+    await env.DB.prepare('DELETE FROM apartment_pin_attempts WHERE apartment_id=?').bind(apt.id).run();
+    if(!cred){const userId=uuid(),salt=randomToken(),email='apartment-'+apt.code.toLowerCase()+'@building-manager.invalid';await env.DB.batch([env.DB.prepare('INSERT INTO users(id,email,salt,password_hash,role,created_at) VALUES(?,?,?,?,?,?)').bind(userId,email,salt,await hashPassword(randomToken(),salt),'resident',iso()),env.DB.prepare('INSERT INTO memberships(user_id,apartment_id,created_at) VALUES(?,?,?)').bind(userId,apt.id,iso())]);await replacePin(env,apt.id,userId,b.pin,true);cred=await pinCredential(env,apt.id);}
+    if(!cred)return fail(req,env,'Σφάλμα λογαριασμού.',500);
+    return response(req,env,{token:await session(env,cred.user_id),must_change:Boolean(cred.must_change)});
+   }
    if(path==='/api/invitations/accept'&&method==='POST'){
     const b=await jsonBody(req);if(!validEmail(b.email)||typeof b.password!=='string'||b.password.length<12||b.password.length>128||typeof b.token!=='string'||!/^([a-f0-9]{64})$/.test(b.token))return fail(req,env,'Μη έγκυρα στοιχεία πρόσκλησης.');
     const tokenHash=await sha(b.token),email=b.email.trim().toLowerCase();
@@ -69,6 +89,29 @@ export default {
    }
    const user=await userFor(req,env);
    if(!user)return fail(req,env,'Απαιτείται σύνδεση.',401);
+   const myPin=await env.DB.prepare('SELECT c.apartment_id,c.must_change FROM apartment_pin_credentials c WHERE c.user_id=?').bind(user.id).first<{apartment_id:string;must_change:number}>();
+   if(path==='/api/account/pin'&&method==='POST'){
+    if(!myPin)return fail(req,env,'Ο λογαριασμός δεν χρησιμοποιεί PIN.',403);
+    const b=await jsonBody(req);if(!validPin(b.pin)||!validPin(b.confirm_pin)||b.pin!==b.confirm_pin)return fail(req,env,'Το PIN πρέπει να έχει 4 ψηφία και να επιβεβαιώνεται.');
+    if(!myPin.must_change){if(!validPin(b.current_pin))return fail(req,env,'Απαιτείται το τρέχον PIN.',403);const cred=await pinCredential(env,myPin.apartment_id);if(!cred||!same(await hashPassword(b.current_pin,cred.salt),cred.pin_hash))return fail(req,env,'Λανθασμένο τρέχον PIN.',403);}
+    if(b.pin===defaultPin((await env.DB.prepare('SELECT code FROM apartments WHERE id=?').bind(myPin.apartment_id).first<{code:string}>())?.code||''))return fail(req,env,'Επιλέξτε διαφορετικό PIN από το αρχικό.');
+    await replacePin(env,myPin.apartment_id,user.id,b.pin,false);await env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(user.id).run();await audit(env,user.id,'resident_pin_changed','apartment',myPin.apartment_id).run();return response(req,env,{token:await session(env,user.id)});
+   }
+   if(myPin?.must_change&&path!=='/api/logout'&&path!=='/api/account')return fail(req,env,'Αλλάξτε πρώτα το αρχικό PIN.',403);
+   if(path==='/api/account'&&method==='GET')return response(req,env,{role:user.role,apartment_code:myPin?(await env.DB.prepare('SELECT code FROM apartments WHERE id=?').bind(myPin.apartment_id).first<{code:string}>())?.code:null,must_change:Boolean(myPin?.must_change)});
+   if(path==='/api/admin/pins'&&method==='GET'){
+    if(user.role!=='admin')return fail(req,env,'Δεν επιτρέπεται.',403);
+    const rows=(await env.DB.prepare('SELECT a.code,c.must_change,c.updated_at FROM apartments a LEFT JOIN apartment_pin_credentials c ON c.apartment_id=a.id ORDER BY a.code').all()).results;
+    return response(req,env,{apartments:rows.map((x:any)=>({code:x.code,activated:x.must_change===0,must_change:x.must_change===null||x.must_change===1,updated_at:x.updated_at}))});
+   }
+   if(path==='/api/admin/pins/reset'&&method==='POST'){
+    if(user.role!=='admin')return fail(req,env,'Δεν επιτρέπεται.',403);
+    const b=await jsonBody(req);if(typeof b.apartment_code!=='string'||!validPin(b.pin))return fail(req,env,'Επιλέξτε διαμέρισμα και τετραψήφιο PIN.');
+    const apt=await env.DB.prepare('SELECT id,code FROM apartments WHERE code=?').bind(b.apartment_code).first<{id:string;code:string}>();if(!apt)return fail(req,env,'Άγνωστο διαμέρισμα.');
+    let cred=await pinCredential(env,apt.id);
+    if(!cred){const userId=uuid(),salt=randomToken();await env.DB.batch([env.DB.prepare('INSERT INTO users(id,email,salt,password_hash,role,created_at) VALUES(?,?,?,?,?,?)').bind(userId,'apartment-'+apt.code.toLowerCase()+'@building-manager.invalid',salt,await hashPassword(randomToken(),salt),'resident',iso()),env.DB.prepare('INSERT INTO memberships(user_id,apartment_id,created_at) VALUES(?,?,?)').bind(userId,apt.id,iso())]);await replacePin(env,apt.id,userId,b.pin,true);cred=await pinCredential(env,apt.id);}else await replacePin(env,apt.id,cred.user_id,b.pin,true);
+    await env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(cred!.user_id).run();await env.DB.prepare('DELETE FROM apartment_pin_attempts WHERE apartment_id=?').bind(apt.id).run();await audit(env,user.id,'resident_pin_reset','apartment',apt.id,{code:apt.code}).run();return response(req,env,{ok:true});
+   }
    if(path==='/api/logout'&&method==='POST'){const match=/^Bearer ([a-f0-9]{64})$/.exec(req.headers.get('Authorization')||'');if(match)await env.DB.prepare('DELETE FROM sessions WHERE token_hash=?').bind(await sha(match[1])).run();return response(req,env,{ok:true});}
    if(path==='/api/overview'&&method==='GET'){
     const own=await myApartmentIds(env,user);
