@@ -343,6 +343,18 @@ export default {
     ]);
     return response(req,env,{ok:true,id},201);
    }
+   if(path==='/api/announcements/delete'&&method==='POST'){
+    const b=await jsonBody(req);
+    if(typeof b.id!=='string'||!b.id||b.id.length>100)return fail(req,env,'Μη έγκυρη ανακοίνωση.');
+    const target=await env.DB.prepare('SELECT id,title,body,published_at,archived_at FROM announcements WHERE id=?').bind(b.id).first<{id:string;title:string;body:string;published_at:string;archived_at:string|null}>();
+    if(!target)return fail(req,env,'Η ανακοίνωση δεν βρέθηκε.',404);
+    await env.DB.batch([
+     env.DB.prepare('DELETE FROM announcement_reads WHERE announcement_id=?').bind(b.id),
+     env.DB.prepare('DELETE FROM announcements WHERE id=?').bind(b.id),
+     audit(env,user.id,'announcement_deleted','announcement',b.id,{title:target.title,body:target.body,published_at:target.published_at,archived_at:target.archived_at})
+    ]);
+    return response(req,env,{ok:true});
+   }
    if(path==='/api/announcements/archive'&&method==='POST'){
     const b=await jsonBody(req);
     if(typeof b.id!=='string'||b.id.length>100)return fail(req,env,'Μη έγκυρη ανακοίνωση.');
