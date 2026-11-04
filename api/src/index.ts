@@ -512,6 +512,15 @@ export default {
     ]);
     return response(req,env,{ok:true});
    }
+   if(path==='/api/payments/delete'&&method==='POST'){
+    const b=await jsonBody(req);
+    if(typeof b.id!=='string'||b.id.length>100)return fail(req,env,'Μη έγκυρη πληρωμή.');
+    const payment=await env.DB.prepare('SELECT p.id,a.code AS apartment_code,p.kind,p.amount_cents,p.paid_on,p.source_declaration_id FROM payments p JOIN apartments a ON a.id=p.apartment_id WHERE p.id=?').bind(b.id).first<{id:string;apartment_code:string;kind:string;amount_cents:number;paid_on:string;source_declaration_id:string|null}>();
+    if(!payment)return fail(req,env,'Η πληρωμή δεν βρέθηκε.',404);
+    if(payment.source_declaration_id)return fail(req,env,'Η πληρωμή προέρχεται από εγκεκριμένη δήλωση. Αναιρέστε πρώτα την έγκριση.',409);
+    await env.DB.batch([env.DB.prepare('DELETE FROM payments WHERE id=?').bind(b.id),audit(env,user.id,'payment_deleted','payment',b.id,{...payment,reason:typeof b.reason==='string'?b.reason.slice(0,300):''})]);
+    return response(req,env,{ok:true});
+   }
    if(path==='/api/payments/update'&&method==='POST'){
     const b=await jsonBody(req);
     if(typeof b.id!=='string'||b.id.length>100||typeof b.apartment_code!=='string'||!['common','heating'].includes(String(b.kind))||!cents(b.amount_cents)||!validDate(b.paid_on))return fail(req,env,'Ελέγξτε τα στοιχεία της πληρωμής.');
