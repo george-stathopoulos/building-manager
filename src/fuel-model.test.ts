@@ -48,7 +48,7 @@ describe('fuel accounting from physical measurements',()=>{
  });
  it('excludes invalid decreasing meter readings instead of creating consumption',()=>{
   const result=calculateFuelAccounts({
-   apartments,settings,
+   apartments,settings,settledThrough:'2026-01-01',
    readings:[
     {apartment_id:'a',measured_on:'2026-01-01',reading:100},
     {apartment_id:'b',measured_on:'2026-01-01',reading:500},
