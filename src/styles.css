@@ -296,3 +296,26 @@ button,a,input,select,textarea,summary,[role="button"]{touch-action:manipulation
 .resident-declaration input{display:block;width:100%;max-width:340px;min-height:48px;font-size:18px}
 .resident-declaration button{min-height:52px;font-size:17px}
 @media(max-width:420px){.owner-shell{padding:14px 12px 50px}.owner-header{flex-wrap:wrap}.owner-navigation{gap:5px}.owner-payment-card{padding:17px}.owner-navigation button{font-size:15px}}
+
+
+/* Resident payment confirmation: deliberate, touch-friendly primary action. */
+.resident-declaration--common{padding:18px 16px;background:#edf8f7;border:1px solid #c9e5e1;border-radius:18px;margin:18px 0 24px}
+.resident-declaration-question{display:block;font-size:18px;line-height:1.4;color:#18323c;margin-bottom:15px}
+.resident-declaration--common .resident-declaration-confirm{display:flex;align-items:center;justify-content:center;gap:12px;width:100%;min-height:58px;padding:13px 16px;border:0;border-radius:15px;background:#007f73;color:#fff;font-size:18px;font-weight:800;line-height:1.25;box-shadow:0 3px 10px rgba(0,93,83,.13);cursor:pointer}
+.resident-declaration-confirm span{display:inline-grid;place-items:center;width:26px;height:26px;flex:none;border-radius:50%;background:#fff;color:#007f73;font-size:20px}
+.resident-declaration--common .resident-declaration-confirm:active{transform:scale(.99)}
+.resident-declaration--common .resident-declaration-confirm:focus-visible{outline:3px solid #005e56;outline-offset:3px}
+.resident-declaration--common .resident-declaration-confirm:disabled{opacity:.55;cursor:wait}
+.resident-declaration-help{font-size:14px;color:#5d7480;line-height:1.5;margin:12px 2px 0}
+.resident-declaration-pending strong{color:#805f12;font-size:17px}
+.resident-declaration-pending p{font-size:15px;line-height:1.5;margin:8px 0 0}
+.resident-news-heading{font-size:20px;margin:24px 0 12px}
+.resident-news-payment{display:flex;align-items:flex-start;gap:12px;padding:16px;margin:10px 0;border:1px solid #d8e3e9;border-radius:16px;background:#f8fafb}
+.resident-news-payment-icon{display:grid;place-items:center;flex:none;width:35px;height:35px;border-radius:50%;font-size:22px;font-weight:800;background:#fff2d7;color:#956a14}
+.resident-news-payment--confirmed{border-color:#c4e7d5;background:#f3fbf6}
+.resident-news-payment--confirmed .resident-news-payment-icon{background:#d7f1e2;color:#147147}
+.resident-news-payment--rejected{border-color:#f0c7cd;background:#fff6f7}
+.resident-news-payment--rejected .resident-news-payment-icon{background:#f9e1e4;color:#a22e40}
+.resident-news-payment strong{display:block;font-size:16px;line-height:1.35}
+.resident-news-payment p{margin:6px 0;color:#263f4a;font-size:15px}
+.resident-news-payment small{display:block;font-size:14px;line-height:1.5;color:#657b87}
