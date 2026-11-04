@@ -123,9 +123,10 @@ export default {
     const tank_history=(await env.DB.prepare('SELECT id,measured_on,centimeters FROM tank_measurements ORDER BY measured_on DESC LIMIT 100').all<{id:string;measured_on:string;centimeters:number}>()).results;
     const fuel_deliveries=user.role==='admin'?(await env.DB.prepare('SELECT id,delivered_on,liters,cost_cents,note FROM fuel_deliveries ORDER BY delivered_on DESC LIMIT 500').all()).results:[];
     const accessible=new Set(a.filter(x=>!own||own.includes(x.id)).map(x=>x.code));
-    return response(req,env,{role:user.role,email:user.email,my_apartments:[...accessible],apartments:a.filter(x=>accessible.has(x.code)),expenses:user.role==='admin'?es:[],fuel_deliveries,payments:ps.filter(x=>accessible.has(x.apartment_code)),readings:rs.filter(x=>accessible.has(x.apartment_code)),tank,tank_history});
+    return response(req,env,{role:user.role,email:user.email,my_apartments:[...accessible],apartments:a.filter(x=>accessible.has(x.code)),expenses:user.role==='admin'?es:[],fuel_deliveries,payments:ps.filter(x=>accessible.has(x.apartment_code)),readings:rs.filter(x=>accessible.has(x.apartment_code)),tank:user.role==='admin'?tank:null,tank_history:user.role==='admin'?tank_history:[]});
    }
    if(path==='/api/statements'&&method==='GET'){
+    if(user.role!=='admin')return fail(req,env,'Δεν επιτρέπεται η προβολή των συνολικών καταστάσεων.',403);
     const rows=(await env.DB.prepare('SELECT month,address,method,items_json,names_json,created_at,updated_at FROM monthly_statements ORDER BY month DESC').all()).results;
     return response(req,env,{statements:rows.map((r:any)=>({month:r.month,address:r.address,method:r.method,items:JSON.parse(r.items_json),names:JSON.parse(r.names_json),created_at:r.created_at,updated_at:r.updated_at}))});
    }
