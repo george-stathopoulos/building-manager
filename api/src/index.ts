@@ -138,15 +138,17 @@ export default {
     const settings=await env.DB.prepare('SELECT liters_per_cm,price_cents_per_liter FROM fuel_settings WHERE id=1').first<FuelSettings>();
     if(!settings)return fail(req,env,'Δεν έχουν ενεργοποιηθεί ακόμη οι ρυθμίσεις θέρμανσης.',503);
     const legacy=(await env.DB.prepare('SELECT apartment_id,as_of,reported_deposited_cents,reported_estimated_consumed_cents FROM fuel_legacy_snapshots').all<{apartment_id:string;as_of:string;reported_deposited_cents:number;reported_estimated_consumed_cents:number}>()).results;
-    const model=calculateFuelAccounts({apartments,readings,tank,deliveries,payments,openings,settings});
+    const settlement=await env.DB.prepare('SELECT settled_through,historical_arrears_cents,credit_status FROM fuel_settlement WHERE id=1').first<{settled_through:string;historical_arrears_cents:number;credit_status:string}>();
+    if(!settlement)return fail(req,env,'Δεν έχει οριστεί ακόμη η ημερομηνία εκκαθάρισης θέρμανσης.',503);
+    const model=calculateFuelAccounts({apartments,readings,tank,deliveries,payments,openings,settings,settledThrough:settlement.settled_through});
     const visible=apartments.filter(a=>!own||own.includes(a.id));
     return response(req,env,{
-     settings,
+     settings,settlement,
      accounts:model.accounts.filter(a=>visible.some(v=>v.code===a.apartment_code)).map(a=>({
       ...a,legacy:legacy.find(x=>visible.some(v=>v.code===a.apartment_code&&v.id===x.apartment_id))||null
      })),
      excluded:model.excluded,period_count:model.periodCount,
-     note:'Υπολογισμοί κατά προσέγγιση. Δεν αποτελούν χρεώσεις ή απλήρωτα τιμολόγια. Στην ίδια ημερομηνία, ο ανεφοδιασμός θεωρείται ότι έγινε μετά τη μέτρηση δεξαμενής.'
+     note:'Όλες οι ιστορικές καταναλώσεις έως την ημερομηνία εκκαθάρισης έχουν εξοφληθεί. Οι νέες εκτιμήσεις υπολογίζονται μόνο από επόμενες μετρήσεις. Τυχόν υπόλοιπο πίστωσης απαιτεί ξεχωριστή συμφωνία.'
     });
    }
    if(path==='/api/announcements'&&method==='GET'){
@@ -319,6 +321,8 @@ export default {
     if(b.as_of>iso().slice(0,10))return fail(req,env,'Η ημερομηνία βάσης δεν μπορεί να είναι μελλοντική.');
     const apt=await env.DB.prepare('SELECT id FROM apartments WHERE code=?').bind(b.apartment_code).first<{id:string}>();
     if(!apt)return fail(req,env,'Άγνωστο διαμέρισμα.');
+    const settled=await env.DB.prepare('SELECT settled_through FROM fuel_settlement WHERE id=1').first<{settled_through:string}>();
+    if(!settled||b.as_of<settled.settled_through)return fail(req,env,'Η αφετηρία δεν μπορεί να προηγείται της εξοφλημένης ιστορικής περιόδου.');
     const measured=await env.DB.prepare('SELECT id FROM tank_measurements WHERE measured_on=?').bind(b.as_of).first();
     if(!measured)return fail(req,env,'Επιλέξτε ημερομηνία που έχει ήδη μετρήσεις θέρμανσης και δεξαμενής.');
     const before=await env.DB.prepare('SELECT * FROM fuel_openings WHERE apartment_id=?').bind(apt.id).first();
