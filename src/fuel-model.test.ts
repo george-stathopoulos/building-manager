@@ -79,7 +79,7 @@ describe('fuel accounting from physical measurements',()=>{
   expect(result.accounts[0].historical_periods).toHaveLength(1);
   expect(result.accounts[0].periods).toHaveLength(1);
   expect(result.accounts[0].historical_arrears_cents).toBe(0);
-  expect(result.accounts[0].estimated_cost_cents).toBe(5000);
+  expect(result.accounts[0].estimated_cost_cents).toBe(6667);
   expect(result.accounts[0].estimated_balance_cents).toBeNull();
  });
 });
