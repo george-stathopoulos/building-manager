@@ -58,7 +58,6 @@ export function calculateFuelAccounts(input:Input):{accounts:FuelAccount[];exclu
   allFuelCost+=costCents;
   periodCount++;
   accounts.forEach((account,i)=>{
-   const apt=input.apartments[i];
    const part={start:start.measured_on,end:end.measured_on,hours:hours[i],liters:portions[i]/100,cost_cents:costs[i]};
    account.periods.push(part);
    account.hours+=part.hours;
