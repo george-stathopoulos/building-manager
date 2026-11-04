@@ -100,7 +100,10 @@ export default {
     await replacePin(env,myPin.apartment_id,user.id,b.pin,false);await env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(user.id).run();await audit(env,user.id,'resident_pin_changed','apartment',myPin.apartment_id).run();return response(req,env,{token:await session(env,user.id)});
    }
    if(myPin?.must_change&&path!=='/api/logout'&&path!=='/api/account')return fail(req,env,'Αλλάξτε πρώτα το αρχικό PIN.',403);
-   if(path==='/api/account'&&method==='GET')return response(req,env,{role:user.role,apartment_code:myPin?(await env.DB.prepare('SELECT code FROM apartments WHERE id=?').bind(myPin.apartment_id).first<{code:string}>())?.code:null,must_change:Boolean(myPin?.must_change)});
+   const owner= user.role!=='admin' && (await env.DB.prepare("SELECT 1 AS found FROM memberships m JOIN apartments a ON a.id=m.apartment_id WHERE m.user_id=? AND a.code='B3' LIMIT 1").bind(user.id).first())!==null;
+   const canReview=user.role==='admin'||owner;
+   const effectiveRole=owner?'owner':user.role;
+   if(path==='/api/account'&&method==='GET')return response(req,env,{role:effectiveRole,apartment_code:myPin?(await env.DB.prepare('SELECT code FROM apartments WHERE id=?').bind(myPin.apartment_id).first<{code:string}>())?.code:null,must_change:Boolean(myPin?.must_change)});
    if(path==='/api/admin/pins'&&method==='GET'){
     if(user.role!=='admin')return fail(req,env,'Δεν επιτρέπεται.',403);
     const rows=(await env.DB.prepare('SELECT a.code,c.must_change,c.updated_at FROM apartments a LEFT JOIN apartment_pin_credentials c ON c.apartment_id=a.id ORDER BY a.code').all()).results;
@@ -116,16 +119,16 @@ export default {
    }
    if(path==='/api/logout'&&method==='POST'){const match=/^Bearer ([a-f0-9]{64})$/.exec(req.headers.get('Authorization')||'');if(match)await env.DB.prepare('DELETE FROM sessions WHERE token_hash=?').bind(await sha(match[1])).run();return response(req,env,{ok:true});}
    if(path==='/api/overview'&&method==='GET'){
-    const own=await myApartmentIds(env,user);
+    const own=canReview?null:await myApartmentIds(env,user);
     const a=(await env.DB.prepare('SELECT id,code,common_weight AS common_share,heating_share_bp/100.0 AS heating_share FROM apartments ORDER BY code').all<{id:string;code:string;common_share:number;heating_share:number}>()).results;
     const es=(await env.DB.prepare('SELECT id,month,category,description,amount_cents,created_at FROM expenses ORDER BY month DESC,created_at DESC LIMIT 500').all()).results;
     const ps=(await env.DB.prepare('SELECT p.id,a.code AS apartment_code,p.kind,p.amount_cents,p.paid_on FROM payments p JOIN apartments a ON a.id=p.apartment_id ORDER BY p.paid_on DESC,p.created_at DESC LIMIT 500').all<{id:string;apartment_code:string;kind:string;amount_cents:number;paid_on:string}>()).results;
     const rs=(await env.DB.prepare('SELECT r.id,a.code AS apartment_code,r.reading,r.measured_on FROM heating_readings r JOIN apartments a ON a.id=r.apartment_id ORDER BY r.measured_on DESC,a.code LIMIT 500').all<{id:string;apartment_code:string;reading:number;measured_on:string}>()).results;
     const tank=await env.DB.prepare('SELECT measured_on,centimeters FROM tank_measurements ORDER BY measured_on DESC LIMIT 1').first<{measured_on:string;centimeters:number}>();
     const tank_history=(await env.DB.prepare('SELECT id,measured_on,centimeters FROM tank_measurements ORDER BY measured_on DESC LIMIT 100').all<{id:string;measured_on:string;centimeters:number}>()).results;
-    const fuel_deliveries=user.role==='admin'?(await env.DB.prepare('SELECT id,delivered_on,liters,cost_cents,note FROM fuel_deliveries ORDER BY delivered_on DESC LIMIT 500').all()).results:[];
+    const fuel_deliveries=canReview?(await env.DB.prepare('SELECT id,delivered_on,liters,cost_cents,note FROM fuel_deliveries ORDER BY delivered_on DESC LIMIT 500').all()).results:[];
     const accessible=new Set(a.filter(x=>!own||own.includes(x.id)).map(x=>x.code));
-    return response(req,env,{role:user.role,email:user.email,my_apartments:[...accessible],apartments:a.filter(x=>accessible.has(x.code)),expenses:user.role==='admin'?es:[],fuel_deliveries,payments:ps.filter(x=>accessible.has(x.apartment_code)),readings:rs.filter(x=>accessible.has(x.apartment_code)),tank:user.role==='admin'?tank:null,tank_history:user.role==='admin'?tank_history:[]});
+    return response(req,env,{role:effectiveRole,email:user.email,my_apartments:[...accessible],apartments:a.filter(x=>accessible.has(x.code)),expenses:canReview?es:[],fuel_deliveries,payments:ps.filter(x=>accessible.has(x.apartment_code)),readings:rs.filter(x=>accessible.has(x.apartment_code)),tank:canReview?tank:null,tank_history:canReview?tank_history:[]});
    }
    if(path==='/api/fuel/accounts'&&method==='GET'){
     const own=await myApartmentIds(env,user);
@@ -198,7 +201,7 @@ export default {
       const allocations=allocate(items.reduce((n,x)=>n+x.amount_cents,0),apartments,st.method);
       const rows=apartments.filter(a=>!own||own.includes(a.id)).map(a=>{
         const i=apartments.findIndex(x=>x.id===a.id),p=payments.find(p=>p.month===st.month&&p.apartment_id===a.id);
-        const due=allocations[i],paid=Math.min(p?.paid_cents||0,due);
+        const due=allocations[i],paid=['A2','B3'].includes(a.code)?due:Math.min(p?.paid_cents||0,due);
         return {apartment_code:a.code,due_cents:due,paid_cents:paid,balance_cents:due-paid,paid_on:p?.paid_on||null,paid:paid>=due};
       });
       return {month:st.month,apartments:rows,due_cents:rows.reduce((n,x)=>n+x.due_cents,0),paid_cents:rows.reduce((n,x)=>n+x.paid_cents,0),balance_cents:rows.reduce((n,x)=>n+x.balance_cents,0),paid_count:rows.filter(x=>x.paid).length,apartment_count:rows.length};
@@ -216,7 +219,7 @@ export default {
     const total=items.reduce((sum,item)=>sum+item.amount_cents,0);
     const due=allocate(total,apartments,statement.method);
     const paid=(await env.DB.prepare('SELECT apartment_id,paid_cents,paid_on FROM statement_payments WHERE month=?').bind(month).all<{apartment_id:string;paid_cents:number;paid_on:string|null}>()).results;
-    return response(req,env,{month,apartments:apartments.filter(a=>!own||own.includes(a.id)).map(a=>{const i=apartments.findIndex(x=>x.id===a.id);const payment=paid.find(x=>x.apartment_id===a.id);const paidCents=payment?.paid_cents||0;return {apartment_code:a.code,due_cents:due[i],paid_cents:paidCents,balance_cents:Math.max(0,due[i]-paidCents),paid_on:payment?.paid_on||null,status:paidCents>=due[i]?'paid':paidCents>0?'partial':'unpaid'};})});
+    return response(req,env,{month,apartments:apartments.filter(a=>!own||own.includes(a.id)).map(a=>{const i=apartments.findIndex(x=>x.id===a.id);const payment=paid.find(x=>x.apartment_id===a.id);const paidCents=['A2','B3'].includes(a.code)?due[i]:(payment?.paid_cents||0);return {apartment_code:a.code,due_cents:due[i],paid_cents:paidCents,balance_cents:Math.max(0,due[i]-paidCents),paid_on:payment?.paid_on||null,status:paidCents>=due[i]?'paid':paidCents>0?'partial':'unpaid'};})});
    }
    if(path==='/api/statements/revisions'&&method==='GET'){
     if(user.role!=='admin')return fail(req,env,'Δεν επιτρέπεται.',403);
@@ -228,6 +231,67 @@ export default {
     const events=(await env.DB.prepare('SELECT id,action,entity_type,entity_id,details,created_at FROM audit_events ORDER BY created_at DESC LIMIT 250').all()).results;
     return response(req,env,{events:events.map((x:any)=>({...x,details:JSON.parse(x.details)}))});
    }
+   if(path==='/api/payment-declarations'&&method==='GET'){
+    const rows=(await env.DB.prepare("SELECT d.id,a.code AS apartment_code,d.kind,d.month,d.amount_cents,d.declared_on,d.status,d.created_at,d.reviewed_at FROM payment_declarations d JOIN apartments a ON a.id=d.apartment_id ORDER BY CASE WHEN d.status='pending' THEN 0 ELSE 1 END,d.created_at DESC LIMIT 300").all<{id:string;apartment_code:string;kind:string;month:string|null;amount_cents:number;declared_on:string;status:string;created_at:string;reviewed_at:string|null}>()).results;
+    const own=canReview?null:await myApartmentIds(env,user);
+    const allowed=own?new Set((await env.DB.prepare('SELECT id,code FROM apartments').all<{id:string;code:string}>()).results.filter(a=>own.includes(a.id)).map(a=>a.code)):null;
+    return response(req,env,{declarations:rows.filter(x=>!allowed||allowed.has(x.apartment_code))});
+   }
+   if(path==='/api/payment-declarations'&&method==='POST'){
+    const b=await jsonBody(req);
+    if(typeof b.apartment_code!=='string'||!['common','heating'].includes(String(b.kind))||!validDate(b.declared_on))return fail(req,env,'Ελέγξτε τα στοιχεία πληρωμής.');
+    const apt=await env.DB.prepare('SELECT id,code FROM apartments WHERE code=?').bind(b.apartment_code).first<{id:string;code:string}>();
+    if(!apt)return fail(req,env,'Άγνωστο διαμέρισμα.',404);
+    if(['A2','B3'].includes(apt.code))return fail(req,env,'Το διαμέρισμα εξοφλείται αυτόματα.');
+    if(!canReview){const own=await myApartmentIds(env,user);if(!own?.includes(apt.id))return fail(req,env,'Δεν επιτρέπεται.',403);}
+    let amount=0;let month:string|null=null;
+    if(b.kind==='common'){
+     if(!validMonth(b.month))return fail(req,env,'Επιλέξτε μήνα.');
+     month=b.month;
+     const statement=await env.DB.prepare('SELECT method,items_json FROM monthly_statements WHERE month=?').bind(month).first<{method:string;items_json:string}>();
+     if(!statement)return fail(req,env,'Δεν βρέθηκαν κοινόχρηστα για τον μήνα.',404);
+     const apartments=(await env.DB.prepare('SELECT id,code,common_weight,heating_share_bp FROM apartments ORDER BY code').all<Apartment>()).results;
+     const due=allocate((JSON.parse(statement.items_json) as Array<{amount_cents:number}>).reduce((n,x)=>n+x.amount_cents,0),apartments,statement.method);
+     const already=await env.DB.prepare('SELECT paid_cents FROM statement_payments WHERE month=? AND apartment_id=?').bind(month,apt.id).first<{paid_cents:number}>();
+     amount=Math.max(0,due[apartments.findIndex(a=>a.id===apt.id)]-(already?.paid_cents||0));
+     if(!amount)return fail(req,env,'Τα κοινόχρηστα είναι ήδη εξοφλημένα.');
+    }else{
+     if(!cents(b.amount_cents))return fail(req,env,'Συμπληρώστε έγκυρο ποσό θέρμανσης.');
+     amount=b.amount_cents;
+    }
+    const id=uuid(),timestamp=iso();
+    try{await env.DB.batch([
+     env.DB.prepare('INSERT INTO payment_declarations(id,apartment_id,kind,month,amount_cents,declared_on,status,declared_by,created_at) VALUES(?,?,?,?,?,?,?,?,?)').bind(id,apt.id,b.kind,month,amount,b.declared_on,'pending',user.id,timestamp),
+     audit(env,user.id,'payment_declared','payment_declaration',id,{apartment_code:apt.code,kind:b.kind,month,amount_cents:amount})
+    ]);}catch{return fail(req,env,'Υπάρχει ήδη αίτημα επιβεβαίωσης για αυτόν τον μήνα ή η καταχώριση απέτυχε.',409);}
+    return response(req,env,{ok:true,id},201);
+   }
+   if(path==='/api/payment-declarations/review'&&method==='POST'){
+    if(!canReview)return fail(req,env,'Δεν επιτρέπεται.',403);
+    const b=await jsonBody(req);
+    if(typeof b.id!=='string'||!['confirmed','rejected'].includes(String(b.decision)))return fail(req,env,'Μη έγκυρη απόφαση.');
+    const row=await env.DB.prepare("SELECT d.*,a.code AS apartment_code FROM payment_declarations d JOIN apartments a ON a.id=d.apartment_id WHERE d.id=?").bind(b.id).first<{id:string;apartment_id:string;apartment_code:string;kind:string;month:string|null;amount_cents:number;declared_on:string;status:string}>();
+    if(!row)return fail(req,env,'Το αίτημα δεν βρέθηκε.',404);
+    if(row.status!=='pending')return fail(req,env,'Το αίτημα έχει ήδη εξεταστεί.',409);
+    const timestamp=iso(),confirmed=b.decision==='confirmed';
+    const writes:D1PreparedStatement[]=[
+     env.DB.prepare("UPDATE payment_declarations SET status=?,reviewed_by=?,reviewed_at=? WHERE id=? AND status='pending'").bind(b.decision,user.id,timestamp,b.id)
+    ];
+    if(confirmed&&row.kind==='heating'){
+     writes.push(env.DB.prepare("INSERT OR IGNORE INTO payments(id,apartment_id,kind,amount_cents,paid_on,created_by,created_at,source_declaration_id) SELECT ?,apartment_id,'heating',amount_cents,declared_on,?,?,id FROM payment_declarations WHERE id=? AND status='confirmed' AND reviewed_by=? AND reviewed_at=?").bind(uuid(),user.id,timestamp,b.id,user.id,timestamp));
+    }
+    if(confirmed&&row.kind==='common'&&row.month){
+     const st=await env.DB.prepare('SELECT method,items_json FROM monthly_statements WHERE month=?').bind(row.month).first<{method:string;items_json:string}>();
+     if(!st)return fail(req,env,'Η μηνιαία κατάσταση δεν βρέθηκε.',409);
+     const a=(await env.DB.prepare('SELECT id,code,common_weight,heating_share_bp FROM apartments ORDER BY code').all<Apartment>()).results;
+     const due=allocate((JSON.parse(st.items_json) as Array<{amount_cents:number}>).reduce((n,x)=>n+x.amount_cents,0),a,st.method)[a.findIndex(x=>x.id===row.apartment_id)];
+     writes.push(env.DB.prepare("INSERT INTO statement_payments(month,apartment_id,paid_cents,paid_on,updated_by,updated_at) SELECT ?,apartment_id,?,?,?,? FROM payment_declarations WHERE id=? AND status='confirmed' AND reviewed_by=? AND reviewed_at=? ON CONFLICT(month,apartment_id) DO UPDATE SET paid_cents=excluded.paid_cents,paid_on=excluded.paid_on,updated_by=excluded.updated_by,updated_at=excluded.updated_at").bind(row.month,due,row.declared_on,user.id,timestamp,b.id,user.id,timestamp));
+    }
+    writes.push(audit(env,user.id,'payment_declaration_reviewed','payment_declaration',b.id,{decision:b.decision,apartment_code:row.apartment_code,kind:row.kind,amount_cents:row.amount_cents}));
+    const result=await env.DB.batch(writes);
+    if(result[0].meta.changes!==1)return fail(req,env,'Το αίτημα έχει ήδη εξεταστεί.',409);
+    return response(req,env,{ok:true});
+   }
    if(user.role!=='admin')return fail(req,env,'Δεν έχετε δικαίωμα καταχώρισης.',403);
    if(path==='/api/statements/payments/batch'&&method==='POST'){
     const b=await jsonBody(req);
@@ -237,6 +301,7 @@ export default {
     const st=await env.DB.prepare('SELECT method,items_json FROM monthly_statements WHERE month=?').bind(b.month).first<{method:string;items_json:string}>();
     if(!st)return fail(req,env,'Η κατάσταση δεν βρέθηκε.',404);
     const apartments=(await env.DB.prepare('SELECT id,code,common_weight,heating_share_bp FROM apartments ORDER BY code').all<Apartment>()).results;
+    if(codes.some(x=>['A2','B3'].includes(String(x))))return fail(req,env,'Τα διαμερίσματα A2 και B3 εξοφλούνται αυτόματα.');
     if(codes.some(x=>!apartments.some(a=>a.code===x)))return fail(req,env,'Άγνωστο διαμέρισμα.');
     const total=(JSON.parse(st.items_json) as Array<{amount_cents:number}>).reduce((n,x)=>n+x.amount_cents,0);
     const due=allocate(total,apartments,st.method);
@@ -258,6 +323,7 @@ export default {
     const statement=await env.DB.prepare('SELECT method,items_json FROM monthly_statements WHERE month=?').bind(b.month).first<{method:string;items_json:string}>();
     if(!statement)return fail(req,env,'Η κατάσταση κοινοχρήστων δεν βρέθηκε.',404);
     const apartments=(await env.DB.prepare('SELECT id,code,common_weight,heating_share_bp FROM apartments ORDER BY code').all<Apartment>()).results;
+    if(['A2','B3'].includes(b.apartment_code))return fail(req,env,'Το διαμέρισμα εξοφλείται αυτόματα.');
     const target=apartments.find(a=>a.code===b.apartment_code);
     if(!target)return fail(req,env,'Άγνωστο διαμέρισμα.');
     const total=(JSON.parse(statement.items_json) as Array<{amount_cents:number}>).reduce((n,x)=>n+x.amount_cents,0);
