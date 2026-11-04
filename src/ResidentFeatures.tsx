@@ -7,10 +7,10 @@ export type FuelLegacyView={as_of:string;reported_deposited_cents:number;reporte
 export type FuelAccountView={
  apartment_code:string;opening:FuelOpeningView|null;legacy:FuelLegacyView|null;deposits_cents:number|null;
  estimated_cost_cents:number;estimated_balance_cents:number|null;hours:number;estimated_liters:number;
- estimated_hourly_cost_cents:number|null;remaining_hours:number|null;periods:FuelPeriodView[];warnings:string[];
+ estimated_hourly_cost_cents:number|null;remaining_hours:number|null;periods:FuelPeriodView[];historical_periods:FuelPeriodView[];historical_hours:number;historical_liters:number;historical_cost_cents:number;historical_arrears_cents:number;warnings:string[];
 };
 export type FuelResponse={
- settings:{liters_per_cm:number;price_cents_per_liter:number};accounts:FuelAccountView[];
+ settlement:{settled_through:string;historical_arrears_cents:number;credit_status:string};settings:{liters_per_cm:number;price_cents_per_liter:number};accounts:FuelAccountView[];
  excluded:string[];period_count:number;note:string;
 };
 export type AnnouncementView={
@@ -22,16 +22,17 @@ const fmtHours=(hours:number)=>hours.toLocaleString('el-GR',{maximumFractionDigi
 
 export function FuelAccountSummary({account,compact=false}:{account:FuelAccountView|null|undefined;compact?:boolean}){
  if(!account)return <p className="muted">Δεν υπάρχουν ακόμη στοιχεία κατανάλωσης θέρμανσης.</p>;
- return <div className="fuel-account-summary">
+ return <div className="fuel-account-summary"><p className="fuel-settled-banner">✓ Ιστορική κατανάλωση: εξοφλημένη · Οφειλή 0,00 €</p>
   <div className="fuel-metrics">
    <article><small>Συνολικές καταθέσεις</small><strong>{account.deposits_cents===null?'—':money(account.deposits_cents)}</strong><span>{account.opening?'Από επιβεβαιωμένη αφετηρία':'Αναμένεται συμφωνία ιστορικών καταθέσεων'}</span></article>
-   <article><small>Εκτιμώμενο κόστος</small><strong>{money(account.estimated_cost_cents)}</strong><span>Εκτίμηση από κατανάλωση, όχι τιμολόγιο</span></article>
+   <article><small>Νέο εκτιμώμενο κόστος</small><strong>{money(account.estimated_cost_cents)}</strong><span>Εκτίμηση από κατανάλωση, όχι τιμολόγιο</span></article>
    <article><small>Εκτιμώμενο διαθέσιμο ποσό</small><strong>{account.estimated_balance_cents===null?'—':money(account.estimated_balance_cents)}</strong><span>{account.estimated_balance_cents===null?'Απαιτείται επιβεβαίωση αρχικού υπολοίπου':'Δεν αποτελεί βεβαιωμένη οφειλή'}</span></article>
    <article><small>Εκτιμώμενες ώρες που απομένουν</small><strong>{account.remaining_hours===null?'—':fmtHours(account.remaining_hours)}</strong><span>Με τη μέση ιστορική τιμή ανά ώρα</span></article>
-   <article><small>Μετρημένες ώρες λειτουργίας</small><strong>{fmtHours(account.hours)}</strong><span>Μόνο διαφορές μεταξύ ενδείξεων</span></article>
-   <article><small>Εκτιμώμενα λίτρα κατανάλωσης</small><strong>{account.estimated_liters.toLocaleString('el-GR',{maximumFractionDigits:2})} L</strong><span>Από μεταβολές δεξαμενής, με επιμερισμό ανά ώρες</span></article>
+   <article><small>Νέες ώρες λειτουργίας</small><strong>{fmtHours(account.hours)}</strong><span>Μόνο διαφορές μεταξύ ενδείξεων</span></article>
+   <article><small>Νέα εκτιμώμενα λίτρα</small><strong>{account.estimated_liters.toLocaleString('el-GR',{maximumFractionDigits:2})} L</strong><span>Από μεταβολές δεξαμενής, με επιμερισμό ανά ώρες</span></article>
   </div>
-  {!account.opening&&<p className="fuel-amber">Το αρχικό χρηματικό υπόλοιπο δεν έχει ακόμη επιβεβαιωθεί από τον διαχειριστή. Οι εκτιμήσεις κατανάλωσης εμφανίζονται, όχι όμως υποθετική πίστωση ή οφειλή.</p>}
+  {!account.opening&&<p className="fuel-amber">Το ιστορικό πετρέλαιο έχει εξοφληθεί. Τυχόν αχρησιμοποίητη πίστωση χρειάζεται ξεχωριστή συμφωνία. Οι εκτιμήσεις κατανάλωσης εμφανίζονται, όχι όμως υποθετική πίστωση ή οφειλή.</p>}
+  {!compact&&<details className="fuel-period-details"><summary>Εξοφλημένη ιστορική κατανάλωση ({account.historical_periods.length} περίοδοι)</summary><p className="muted">Ιστορική εκτίμηση: {account.historical_hours.toLocaleString('el-GR')} ώρες · {account.historical_liters.toLocaleString('el-GR')} λίτρα · {money(account.historical_cost_cents)}. Καμία εκκρεμής οφειλή.</p></details>}
   {!compact&&<details className="fuel-period-details"><summary>Αναλυτική εκτίμηση ανά περίοδο ({account.periods.length})</summary>
    <div className="table-wrap"><table><thead><tr><th>Περίοδος</th><th>Ώρες</th><th>Λίτρα (εκτ.)</th><th>Κόστος (εκτ.)</th></tr></thead>
     <tbody>{account.periods.map(p=><tr key={p.start+'|'+p.end}><td>{dateGreek(p.start)} – {dateGreek(p.end)}</td><td>{p.hours.toLocaleString('el-GR',{maximumFractionDigits:2})}</td><td>{p.liters.toLocaleString('el-GR',{maximumFractionDigits:2})}</td><td>{money(p.cost_cents)}</td></tr>)}</tbody></table></div>
