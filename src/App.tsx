@@ -205,6 +205,7 @@ function App(){
  <div className="side-footer">{configured?<><small>{data?.email}</small><button className="logout" onClick={async()=>{try{await request('/logout',{method:'POST'});}catch{}clearToken();setData(null);}}>Αποσύνδεση</button></>:<span>Λειτουργία επίδειξης</span>}</div>
  </aside>
  <main className="content">
+ <nav className="admin-mobile-more" aria-label="Περισσότερες ενότητες διαχείρισης">{navigation.filter(x=>!['home','expenses','heating','announcements'].includes(x.id)).map(x=><button key={x.id} type="button" className={tab===x.id?'active':''} onClick={()=>setTab(x.id)}>{x.name}</button>)}</nav>
  <header className="topbar"><div><span className="eyebrow">ΔΙΑΧΕΙΡΙΣΗ ΠΟΛΥΚΑΤΟΙΚΙΑΣ</span><h1>{navigation.find(n=>n.id===tab)?.name}</h1></div><span className="role">{isAdmin?'Διαχειριστής':'Κάτοικος'}</span></header>
  {!configured&&<div className="notice"><strong>Δοκιμαστική προβολή:</strong> Δεν έχει συνδεθεί ακόμη η ασφαλής υπηρεσία δεδομένων. Δεν εμφανίζονται πραγματικές χρεώσεις και η αποθήκευση είναι απενεργοποιημένη.</div>}
  {status&&<div className="error" role="alert">{status}</div>}
