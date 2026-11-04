@@ -516,7 +516,13 @@ export default {
     if(user.role!=='admin')return fail(req,env,'Δεν επιτρέπεται.',403);
     const b=await jsonBody(req);
     if(typeof b.id!=='string'||b.id.length>100)return fail(req,env,'Μη έγκυρη πληρωμή.');
-    const payment=await env.DB.prepare('SELECT p.id,a.code AS apartment_code,p.kind,p.amount_cents,p.paid_on,p.source_declaration_id FROM payments p JOIN apartments a ON a.id=p.apartment_id WHERE p.id=?').bind(b.id).first<{id:string;apartment_code:string;kind:string;amount_cents:number;paid_on:string;source_declaration_id:string|null}>();
+    let payment:{id:string;apartment_code:string;kind:string;amount_cents:number;paid_on:string;source_declaration_id:string|null}|null;
+    try{
+     payment=await env.DB.prepare('SELECT p.id,a.code AS apartment_code,p.kind,p.amount_cents,p.paid_on,p.source_declaration_id FROM payments p JOIN apartments a ON a.id=p.apartment_id WHERE p.id=?').bind(b.id).first<{id:string;apartment_code:string;kind:string;amount_cents:number;paid_on:string;source_declaration_id:string|null}>();
+    }catch(error){
+     console.error('payment delete lookup failed',error);
+     return fail(req,env,'Η διαγραφή απέτυχε κατά την ανάκτηση της πληρωμής (PAYMENT_LOOKUP_FAILED). Ελέγξτε τις μεταναστεύσεις της βάσης.',500);
+    }
     if(!payment)return fail(req,env,'Η πληρωμή δεν βρέθηκε.',404);
     if(payment.source_declaration_id)return fail(req,env,'Η πληρωμή προέρχεται από εγκεκριμένη δήλωση. Αναιρέστε πρώτα την έγκριση.',409);
     try{
