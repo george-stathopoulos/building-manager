@@ -108,6 +108,9 @@ jobs:
             if(!announcement.ok)throw Error('Announcements failed: HTTP '+announcement.status);
             const announcementData=await announcement.json();
             if(!Array.isArray(announcementData.announcements))throw Error('Announcements response invalid');
+            const declarations=await fetch(base+'/api/payment-declarations',{headers:authHeaders});
+            const declarationsBody=await declarations.json().catch(()=>({}));
+            if(!declarations.ok||!Array.isArray(declarationsBody.declarations))throw Error('Payment declarations failed: HTTP '+declarations.status+' '+String(declarationsBody.error||'invalid response'));
             console.log('Admin login, overview, fuel accounts and announcements passed');
           })().catch(e=>{console.error(e.message);process.exit(1)});
           NODE
