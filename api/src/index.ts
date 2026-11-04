@@ -251,7 +251,7 @@ export default {
    }
    if(path==='/api/payment-declarations'&&method==='POST'){
     const b=await jsonBody(req);
-    if(typeof b.apartment_code!=='string'||!['common','heating'].includes(String(b.kind))||!validDate(b.declared_on))return fail(req,env,'Ελέγξτε τα στοιχεία πληρωμής.');
+    if(typeof b.apartment_code!=='string'||b.kind!=='common'||!validDate(b.declared_on))return fail(req,env,'Ελέγξτε τα στοιχεία πληρωμής.');
     const apt=await env.DB.prepare('SELECT id,code FROM apartments WHERE code=?').bind(b.apartment_code).first<{id:string;code:string}>();
     if(!apt)return fail(req,env,'Άγνωστο διαμέρισμα.',404);
     if(['A2','B3'].includes(apt.code))return fail(req,env,'Το διαμέρισμα εξοφλείται αυτόματα.');
@@ -285,6 +285,7 @@ export default {
     const row=await env.DB.prepare("SELECT d.*,a.code AS apartment_code FROM payment_declarations d JOIN apartments a ON a.id=d.apartment_id WHERE d.id=?").bind(b.id).first<{id:string;apartment_id:string;apartment_code:string;kind:string;month:string|null;amount_cents:number;declared_on:string;status:string}>();
     if(!row)return fail(req,env,'Το αίτημα δεν βρέθηκε.',404);
     if(row.status!=='pending')return fail(req,env,'Το αίτημα έχει ήδη εξεταστεί.',409);
+    if(row.kind==='heating'&&b.decision==='confirmed')return fail(req,env,'Οι καταθέσεις θέρμανσης καταχωρίζονται απευθείας από τον διαχειριστή στην ενότητα Θέρμανση.',409);
     const timestamp=iso(),confirmed=b.decision==='confirmed';
     const writes:D1PreparedStatement[]=[
      env.DB.prepare("UPDATE payment_declarations SET status=?,reviewed_by=?,reviewed_at=? WHERE id=? AND status='pending'").bind(b.decision,user.id,timestamp,b.id)
