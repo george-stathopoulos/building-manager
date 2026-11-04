@@ -1,0 +1,1 @@
+CREATE TABLE IF NOT EXISTS payment_notification_reads (declaration_id TEXT NOT NULL REFERENCES payment_declarations(id) ON DELETE CASCADE, apartment_id TEXT NOT NULL REFERENCES apartments(id), read_at TEXT NOT NULL, PRIMARY KEY(declaration_id,apartment_id));
