@@ -253,3 +253,12 @@ body{background:var(--bm-canvas)}button{transition:background .18s ease,transfor
 .resident-shell .resident-portal-name{color:#163b45}
 .resident-shell .resident-portal-description{color:#45616c}
 .resident-shell .resident-portal-meta{color:#076d62}
+
+/* Session restoration: never flash the login form while a saved session is checked. */
+.session-restore{min-height:100dvh;display:grid;place-items:center}
+.session-restore-card{display:flex;flex-direction:column;align-items:center;gap:13px;text-align:center;max-width:380px;width:min(90vw,380px)}
+.session-restore-card h1{margin:0;font-size:23px}
+.session-restore-card p{margin:0}
+.session-restore-spinner{width:29px;height:29px;border:3px solid #d8ebe6;border-top-color:#087f79;border-radius:50%;animation:bm-session-spin .8s linear infinite}
+@keyframes bm-session-spin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.session-restore-spinner{animation:none;border-top-color:#087f79}}
