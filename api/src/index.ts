@@ -20,6 +20,7 @@ async function replacePin(env:Env,apartmentId:string,userId:string,pin:string,mu
 function validEmail(v:unknown):v is string{return typeof v==='string'&&v.length<=254&&/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(v);}
 function validDate(v:unknown):v is string{if(typeof v!=='string'||!/^\d{4}-\d{2}-\d{2}$/.test(v))return false;const d=new Date(v+'T00:00:00Z');return !Number.isNaN(d.getTime())&&d.toISOString().slice(0,10)===v;}
 function validMonth(v:unknown):v is string{return typeof v==='string'&&/^\d{4}-(0[1-9]|1[0-2])$/.test(v);}
+function validHeatingHours(v:unknown):v is number{return typeof v==='number'&&Number.isFinite(v)&&v>=0&&Math.abs(v*100-Math.round(v*100))<1e-7;}
 function cents(v:unknown):v is number{return typeof v==='number'&&Number.isSafeInteger(v)&&v>0&&v<=1000000000;}
 function jsonBody(req:Request):Promise<Record<string,unknown>>{return req.json().then(v=>{if(!v||typeof v!=='object'||Array.isArray(v))throw Error('Μη έγκυρη υποβολή.');return v as Record<string,unknown>;});}
 async function userFor(req:Request,env:Env){const match=/^Bearer ([a-f0-9]{64})$/.exec(req.headers.get('Authorization')||'');if(!match)return null;return env.DB.prepare('SELECT u.id,u.email,u.role,u.salt,u.password_hash FROM sessions s JOIN users u ON u.id=s.user_id WHERE s.token_hash=? AND s.expires_at>?').bind(await sha(match[1]),iso()).first<DbUser>();}
@@ -268,7 +269,7 @@ export default {
     if(!validDate(b.original_date)||!validDate(b.measured_on)||typeof b.centimeters!=='number'||!Number.isFinite(b.centimeters)||b.centimeters<0||b.centimeters>10000||!Array.isArray(b.readings))return fail(req,env,'Ελέγξτε την ημερομηνία και τις μετρήσεις.');
     const apartments=(await env.DB.prepare('SELECT id,code FROM apartments ORDER BY code').all<{id:string;code:string}>()).results;
     const readings=b.readings as Array<{apartment_code:string;reading:number}>;
-    if(readings.length!==apartments.length||new Set(readings.map(x=>x.apartment_code)).size!==apartments.length||readings.some(x=>!apartments.some(a=>a.code===x.apartment_code)||!(Number.isFinite(x.reading)&&Math.round(x.reading*100)===x.reading*100)||x.reading<0))return fail(req,env,'Απαιτούνται έγκυρες μετρήσεις για όλα τα διαμερίσματα.');
+    if(readings.length!==apartments.length||new Set(readings.map(x=>x.apartment_code)).size!==apartments.length||readings.some(x=>!apartments.some(a=>a.code===x.apartment_code)||!validHeatingHours(x.reading)||x.reading<0))return fail(req,env,'Απαιτούνται έγκυρες μετρήσεις για όλα τα διαμερίσματα.');
     const original=await env.DB.prepare('SELECT id,centimeters,measured_on FROM tank_measurements WHERE measured_on=?').bind(b.original_date).first<{id:string;centimeters:number;measured_on:string}>();
     if(!original)return fail(req,env,'Η μέτρηση προς διόρθωση δεν βρέθηκε.',404);
     if(b.measured_on!==b.original_date){
@@ -300,7 +301,7 @@ export default {
     const statements:D1PreparedStatement[]=[];const tankId=uuid();statements.push(env.DB.prepare('INSERT INTO tank_measurements(id,measured_on,centimeters,created_by,created_at) VALUES(?,?,?,?,?)').bind(tankId,b.measured_on,b.centimeters,user.id,iso()));
     for(const a of apartments){
      const r=readings.find(x=>x.apartment_code===a.code);
-     if(!r||!Number.isSafeInteger(r.reading)||r.reading<0)return fail(req,env,'Λανθασμένη ένδειξη μετρητή.');
+     if(!r||!validHeatingHours(r.reading)||r.reading<0)return fail(req,env,'Λανθασμένη ένδειξη μετρητή.');
      const previous=await env.DB.prepare('SELECT reading FROM heating_readings WHERE apartment_id=? AND measured_on<? ORDER BY measured_on DESC LIMIT 1').bind(a.id,b.measured_on).first<{reading:number}>();
      const next=await env.DB.prepare('SELECT reading FROM heating_readings WHERE apartment_id=? AND measured_on>? ORDER BY measured_on ASC LIMIT 1').bind(a.id,b.measured_on).first<{reading:number}>();
      if((previous&&r.reading<previous.reading)||(next&&r.reading>next.reading))return fail(req,env,'Η ένδειξη '+a.code+' δεν συμφωνεί με το ιστορικό.',409);
