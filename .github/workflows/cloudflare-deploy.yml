@@ -60,6 +60,10 @@ jobs:
       - name: Έλεγχος σχήματος ειδοποιήσεων
         run: |
           npx wrangler d1 execute building-manager-db --remote --command "SELECT name,sql FROM sqlite_master WHERE name IN ('payment_declarations','payment_notification_reads');"
+      - name: Έλεγχος σχήματος πληρωμών
+        run: |
+          npx wrangler d1 execute building-manager-db --remote --command "PRAGMA table_info(payments);"
+          npx wrangler d1 execute building-manager-db --remote --command "SELECT version FROM d1_migrations ORDER BY version DESC LIMIT 8;"
       - name: Δημοσίευση API
         run: npx wrangler deploy
       - name: Δημιουργία αρχικού διαχειριστή
