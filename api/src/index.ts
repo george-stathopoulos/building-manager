@@ -256,6 +256,7 @@ export default {
     if(!validDate(b.requested_on)||!Array.isArray(b.allocations)||b.allocations.length<1||b.allocations.length>6)return fail(req,env,'Ελέγξτε την ημερομηνία και τα ποσά.');
     const entries=b.allocations as Array<{apartment_code:string;amount_cents:number}>;
     if(entries.some(x=>!['A1','A2','A3','B1','B2','B3'].includes(x.apartment_code)||!cents(x.amount_cents))||new Set(entries.map(x=>x.apartment_code)).size!==entries.length)return fail(req,env,'Μη έγκυρα ποσά ή διαμερίσματα.');
+    if(entries.some(x=>['A2','B3'].includes(x.apartment_code)))return fail(req,env,'Τα διαμερίσματα ιδιοκτήτη A2 και B3 εξαιρούνται από αιτήματα πληρωμής θέρμανσης.',403);
     const apartments=(await env.DB.prepare('SELECT id,code FROM apartments').all<{id:string;code:string}>()).results;
     const now=iso(),writes:D1PreparedStatement[]=[];
     for(const e of entries){const id=uuid(),a=apartments.find(x=>x.code===e.apartment_code)!;writes.push(env.DB.prepare("INSERT INTO heating_payment_requests(id,apartment_id,amount_cents,requested_on,status,created_by,created_at,updated_at) VALUES(?,?,?,?,'unpaid',?,?,?)").bind(id,a.id,e.amount_cents,b.requested_on,user.id,now));writes.push(audit(env,user.id,'heating_payment_requested','heating_payment_request',id,{apartment_code:e.apartment_code,amount_cents:e.amount_cents}));}
