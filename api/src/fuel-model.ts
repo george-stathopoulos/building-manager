@@ -1,7 +1,7 @@
 export type FuelApartment={id:string;code:string;heating_share_bp:number};
 export type FuelReading={apartment_id:string;measured_on:string;reading:number};
 export type FuelTank={measured_on:string;centimeters:number};
-export type FuelDelivery={delivered_on:string;liters:number};
+export type FuelDelivery={delivered_on:string;liters:number;cost_cents?:number};
 export type FuelPayment={apartment_id:string;paid_on:string;amount_cents:number};
 export type FuelOpening={apartment_id:string;as_of:string;deposited_cents:number;estimated_consumed_cents:number;note:string};
 export type FuelSettings={liters_per_cm:number;price_cents_per_liter:number};
@@ -33,6 +33,11 @@ export function calculateFuelAccounts(input:Input):{accounts:FuelAccount[];exclu
   remaining_hours:null as number|null,periods:[] as FuelPeriod[],historical_periods:[] as FuelPeriod[],historical_hours:0,historical_liters:0,historical_cost_cents:0,historical_arrears_cents:0,warnings:[] as string[]
  }));
  const excluded:string[]=[];
+ // Moving weighted-average inventory: value stock at the first measured tank level
+ // using the configured baseline price, then add each delivery at its actual invoice cost.
+ // The baseline price is only a valuation assumption for stock without a purchase history.
+ let inventoryLiters=Math.max(0,(tank[0]?.centimeters||0)*input.settings.liters_per_cm);
+ let inventoryValueCents=inventoryLiters*input.settings.price_cents_per_liter;
  let allWeightedHours=0,allFuelCost=0,periodCount=0;
  for(let t=1;t<tank.length;t++){
   const start=tank[t-1],end=tank[t];
@@ -46,11 +51,22 @@ export function calculateFuelAccounts(input:Input):{accounts:FuelAccount[];exclu
   if(totalHours<=0){excluded.push(start.measured_on+' → '+end.measured_on+': no recorded heating hours');continue;}
   // Deliveries on the START day are assumed to follow that day's pre-refill tank reading.
   // A delivery on the END day belongs to the next interval. The assumption is disclosed in UI.
-  const delivered=input.deliveries.filter(d=>d.delivered_on>=start.measured_on&&d.delivered_on<end.measured_on).reduce((a,b)=>a+b.liters,0);
+  const periodDeliveries=input.deliveries.filter(d=>d.delivered_on>=start.measured_on&&d.delivered_on<end.measured_on);
+  const delivered=periodDeliveries.reduce((a,b)=>a+b.liters,0);
   const liters=(start.centimeters-end.centimeters)*input.settings.liters_per_cm+delivered;
   if(!Number.isFinite(liters)||liters<0){excluded.push(start.measured_on+' → '+end.measured_on+': tank movement/refills require review');continue;}
+  // Delivery prices are actual invoice prices. Older deliveries without a recorded
+  // cost fall back to the baseline price, and are explicitly reported as estimates.
+  for(const delivery of periodDeliveries){
+   inventoryLiters+=delivery.liters;
+   inventoryValueCents+=delivery.cost_cents!==undefined?delivery.cost_cents:delivery.liters*input.settings.price_cents_per_liter;
+   if(delivery.cost_cents===undefined)excluded.push('Missing purchase price for delivery '+delivery.delivered_on+'; baseline price used');
+  }
+  const averageCost=inventoryLiters>0?inventoryValueCents/inventoryLiters:input.settings.price_cents_per_liter;
   const totalLitersCenti=Math.round(liters*100);
-  const costCents=Math.round(liters*input.settings.price_cents_per_liter);
+  const costCents=Math.round(liters*averageCost);
+  inventoryLiters=Math.max(0,inventoryLiters-liters);
+  inventoryValueCents=Math.max(0,inventoryValueCents-costCents);
   const weighted=hours.map((v,i)=>v*input.apartments[i].heating_share_bp);
   const portions=distribute(totalLitersCenti,hours);
   const costs=distribute(costCents,weighted);
