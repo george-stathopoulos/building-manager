@@ -267,3 +267,5 @@ body{background:var(--bm-canvas)}button{transition:background .18s ease,transfor
 html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 button,a,input,select,textarea,summary,[role="button"]{touch-action:manipulation}
 @media(pointer:coarse){input,select,textarea{font-size:max(16px,1rem)}}
+
+.announcement-admin-actions{display:flex;flex-wrap:wrap;gap:10px;margin-top:12px}.announcement-admin-actions .announcement-delete-button{background:#fff0f0;color:#a51f2b;border:1px solid #eab4bb}.announcement-admin-actions .announcement-delete-button:hover{background:#ffe0e2}
