@@ -345,3 +345,12 @@ button,a,input,select,textarea,summary,[role="button"]{touch-action:manipulation
 .resident-nav button.active{background:#e5f5f2;color:#008b80}
 .resident-nav-unread{position:absolute;top:2px;left:calc(50% + 11px);min-width:20px;height:20px;display:grid;place-items:center;background:#e5353d;color:#fff;border-radius:999px;font-size:11px;box-shadow:0 0 0 2px #fff}
 @media(max-width:400px){.resident-month-trigger{column-gap:7px}.resident-payment-pending-badge{font-size:12px}.resident-nav button{min-height:64px}}
+
+/* Urgent, unread updates deserve attention on the resident home. */
+.resident-portal-announcements.resident-portal-attention{background:linear-gradient(135deg,#fff1cc 0%,#ffe5a1 100%);border:2px solid #e6b548;box-shadow:0 9px 25px rgba(181,124,15,.17)}
+.resident-portal-announcements.resident-portal-attention .resident-portal-icon{background:#fff;color:#956313}
+.resident-portal-announcements.resident-portal-attention .resident-portal-name{color:#69480a}
+.resident-portal-announcements.resident-portal-attention .resident-portal-meta{color:#8a5100;font-weight:800}
+.resident-portal-announcements.resident-portal-attention .resident-portal-unread{background:#d92d36}
+.resident-pdf-button{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:46px;border:1px solid #b7d6d3;border-radius:12px;background:#e8f5f3;color:#086f67;font-weight:750;padding:10px 15px;cursor:pointer}
+.resident-pdf-button span{font-size:21px;line-height:1}
