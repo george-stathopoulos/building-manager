@@ -9,7 +9,7 @@ const settings={liters_per_cm:20,price_cents_per_liter:100};
 describe('fuel accounting from physical measurements',()=>{
  it('excludes initial meter readings and uses raw hours for litres, weighted hours for costs',()=>{
   const result=calculateFuelAccounts({
-   apartments,settings,
+   apartments,settings,settledThrough:'2026-01-01',
    readings:[
     {apartment_id:'a',measured_on:'2026-01-01',reading:100},
     {apartment_id:'b',measured_on:'2026-01-01',reading:400},
@@ -31,7 +31,7 @@ describe('fuel accounting from physical measurements',()=>{
  });
  it('counts a same-date refill after the start measurement, never as a resident deposit',()=>{
   const result=calculateFuelAccounts({
-   apartments,settings,
+   apartments,settings,settledThrough:'2026-01-20',
    readings:[
     {apartment_id:'a',measured_on:'2026-01-20',reading:50},
     {apartment_id:'b',measured_on:'2026-01-20',reading:60},
@@ -60,5 +60,26 @@ describe('fuel accounting from physical measurements',()=>{
   expect(result.periodCount).toBe(0);
   expect(result.excluded).toHaveLength(1);
   expect(result.accounts[0].estimated_cost_cents).toBe(0);
+ });
+ it('keeps all historic consumption settled and starts new estimates only after the frozen baseline',()=>{
+  const result=calculateFuelAccounts({
+   apartments,settings,settledThrough:'2026-01-10',
+   readings:[
+    {apartment_id:'a',measured_on:'2026-01-01',reading:100},
+    {apartment_id:'b',measured_on:'2026-01-01',reading:100},
+    {apartment_id:'a',measured_on:'2026-01-10',reading:110},
+    {apartment_id:'b',measured_on:'2026-01-10',reading:120},
+    {apartment_id:'a',measured_on:'2026-01-20',reading:120},
+    {apartment_id:'b',measured_on:'2026-01-20',reading:130}
+   ],
+   tank:[{measured_on:'2026-01-01',centimeters:90},{measured_on:'2026-01-10',centimeters:80},{measured_on:'2026-01-20',centimeters:75}],
+   deliveries:[],payments:[],openings:[]
+  });
+  expect(result.periodCount).toBe(1);
+  expect(result.accounts[0].historical_periods).toHaveLength(1);
+  expect(result.accounts[0].periods).toHaveLength(1);
+  expect(result.accounts[0].historical_arrears_cents).toBe(0);
+  expect(result.accounts[0].estimated_cost_cents).toBe(5000);
+  expect(result.accounts[0].estimated_balance_cents).toBeNull();
  });
 });
