@@ -231,6 +231,50 @@ export default {
     const events=(await env.DB.prepare('SELECT id,action,entity_type,entity_id,details,created_at FROM audit_events ORDER BY created_at DESC LIMIT 250').all()).results;
     return response(req,env,{events:events.map((x:any)=>({...x,details:JSON.parse(x.details)}))});
    }
+   if(path==='/api/heating-requests'&&method==='GET'){
+    const own=await myApartmentIds(env,user);
+    const rows=(await env.DB.prepare("SELECT h.id,a.code AS apartment_code,h.amount_cents,h.requested_on,h.status,h.declared_on,h.confirmed_on,h.created_at FROM heating_payment_requests h JOIN apartments a ON a.id=h.apartment_id ORDER BY h.created_at DESC LIMIT 300").all<{id:string;apartment_code:string;amount_cents:number;requested_on:string;status:string;declared_on:string|null;confirmed_on:string|null;created_at:string}>()).results;
+    const codes=own?new Set((await env.DB.prepare('SELECT id,code FROM apartments').all<{id:string;code:string}>()).results.filter(a=>own.includes(a.id)).map(a=>a.code)):null;
+    return response(req,env,{requests:canReview?rows:rows.filter(x=>codes?.has(x.apartment_code))});
+   }
+   if(path==='/api/heating-requests/declare'&&method==='POST'){
+    const b=await jsonBody(req);
+    if(typeof b.id!=='string')return fail(req,env,'Μη έγκυρο αίτημα.');
+    const row=await env.DB.prepare('SELECT apartment_id,status FROM heating_payment_requests WHERE id=?').bind(b.id).first<{apartment_id:string;status:string}>();
+    if(!row)return fail(req,env,'Δεν βρέθηκε η χρέωση.',404);
+    const own=await myApartmentIds(env,user);
+    if(!canReview&&!own?.includes(row.apartment_id))return fail(req,env,'Δεν επιτρέπεται.',403);
+    if(row.status!=='unpaid')return fail(req,env,'Η πληρωμή έχει ήδη δηλωθεί.',409);
+    const now=iso();
+    const result=await env.DB.batch([env.DB.prepare("UPDATE heating_payment_requests SET status='pending',declared_on=?,updated_at=? WHERE id=? AND status='unpaid'").bind(now.slice(0,10),now,b.id),audit(env,user.id,'heating_payment_declared','heating_payment_request',b.id,{})]);
+    if(result[0].meta.changes!==1)return fail(req,env,'Η πληρωμή έχει ήδη δηλωθεί.',409);
+    return response(req,env,{ok:true});
+   }
+   if(path==='/api/heating-requests/create'&&method==='POST'){
+    if(user.role!=='admin')return fail(req,env,'Μόνο ο διαχειριστής δημιουργεί χρεώσεις θέρμανσης.',403);
+    const b=await jsonBody(req);
+    if(!validDate(b.requested_on)||!Array.isArray(b.allocations)||b.allocations.length<1||b.allocations.length>6)return fail(req,env,'Ελέγξτε την ημερομηνία και τα ποσά.');
+    const entries=b.allocations as Array<{apartment_code:string;amount_cents:number}>;
+    if(entries.some(x=>!apartmentCodes.includes(x.apartment_code)||!cents(x.amount_cents))||new Set(entries.map(x=>x.apartment_code)).size!==entries.length)return fail(req,env,'Μη έγκυρα ποσά ή διαμερίσματα.');
+    const apartments=(await env.DB.prepare('SELECT id,code FROM apartments').all<{id:string;code:string}>()).results;
+    const now=iso(),writes:D1PreparedStatement[]=[];
+    for(const e of entries){const id=uuid(),a=apartments.find(x=>x.code===e.apartment_code)!;writes.push(env.DB.prepare("INSERT INTO heating_payment_requests(id,apartment_id,amount_cents,requested_on,status,created_by,created_at,updated_at) VALUES(?,?,?,?,'unpaid',?,?,?)").bind(id,a.id,e.amount_cents,b.requested_on,user.id,now));writes.push(audit(env,user.id,'heating_payment_requested','heating_payment_request',id,{apartment_code:e.apartment_code,amount_cents:e.amount_cents}));}
+    await env.DB.batch(writes);return response(req,env,{ok:true,created:entries.length},201);
+   }
+   if(path==='/api/heating-requests/review'&&method==='POST'){
+    if(!canReview)return fail(req,env,'Δεν επιτρέπεται.',403);
+    const b=await jsonBody(req);
+    if(typeof b.id!=='string'||!['confirmed','unpaid'].includes(String(b.decision))||!validDate(b.paid_on))return fail(req,env,'Ελέγξτε τα στοιχεία επιβεβαίωσης.');
+    const h=await env.DB.prepare('SELECT * FROM heating_payment_requests WHERE id=?').bind(b.id).first<{id:string;apartment_id:string;amount_cents:number;status:string}>();
+    if(!h)return fail(req,env,'Δεν βρέθηκε η πληρωμή.',404);
+    if(h.status!=='pending')return fail(req,env,'Η δήλωση δεν εκκρεμεί.',409);
+    const now=iso(),id=uuid(),confirmed=b.decision==='confirmed';
+    const writes:D1PreparedStatement[]=[];
+    if(confirmed)writes.push(env.DB.prepare("INSERT INTO payments(id,apartment_id,kind,amount_cents,paid_on,created_by,created_at) VALUES(?,?,'heating',?,?,?,?)").bind(id,h.apartment_id,h.amount_cents,b.paid_on,user.id,now));
+    writes.push(env.DB.prepare("UPDATE heating_payment_requests SET status=?,confirmed_on=?,payment_id=?,reviewed_by=?,updated_at=? WHERE id=? AND status='pending'").bind(b.decision,confirmed?b.paid_on:null,confirmed?id:null,user.id,now,b.id));
+    writes.push(audit(env,user.id,'heating_payment_reviewed','heating_payment_request',b.id,{decision:b.decision,amount_cents:h.amount_cents,paid_on:b.paid_on}));
+    await env.DB.batch(writes);return response(req,env,{ok:true});
+   }
    if(path==='/api/payment-declarations'&&method==='GET'){
     const rows=(await env.DB.prepare("SELECT d.id,a.code AS apartment_code,d.kind,d.month,d.amount_cents,d.declared_on,d.status,d.reversed_at,d.created_at,d.reviewed_at,CASE WHEN n.declaration_id IS NOT NULL THEN 1 ELSE 0 END AS notification_read FROM payment_declarations d JOIN apartments a ON a.id=d.apartment_id LEFT JOIN payment_notification_reads n ON n.declaration_id=d.id AND n.apartment_id=d.apartment_id ORDER BY CASE WHEN d.status='pending' THEN 0 ELSE 1 END,d.created_at DESC LIMIT 300").all<{id:string;apartment_code:string;kind:string;month:string|null;amount_cents:number;declared_on:string;status:string;created_at:string;reviewed_at:string|null;reversed_at:string|null;notification_read:number}>()).results;
     const own=canReview?null:await myApartmentIds(env,user);
