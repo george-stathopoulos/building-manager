@@ -354,3 +354,5 @@ button,a,input,select,textarea,summary,[role="button"]{touch-action:manipulation
 .resident-portal-announcements.resident-portal-attention .resident-portal-unread{background:#d92d36}
 .resident-pdf-button{display:inline-flex;align-items:center;justify-content:center;gap:9px;min-height:46px;border:1px solid #b7d6d3;border-radius:12px;background:#e8f5f3;color:#086f67;font-weight:750;padding:10px 15px;cursor:pointer}
 .resident-pdf-button span{font-size:21px;line-height:1}
+
+.payment-reverse-button{display:inline-flex;align-items:center;gap:8px;margin:12px 0;padding:11px 15px;min-height:46px;border:1px solid #c88383;border-radius:12px;background:#fff7f7;color:#972e39;font-weight:750;cursor:pointer}.payment-reverse-button:disabled{opacity:.5;cursor:wait}
