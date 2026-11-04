@@ -195,3 +195,22 @@ html,body,#root{max-width:100%;overflow-x:clip}
 .period-comparison{display:grid;gap:7px;margin:14px 0 4px;padding:12px;border-radius:12px;background:#f5f9fa;font-size:12px;color:#5d7581}.period-comparison span{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}.period-comparison strong{color:#214b5b}
 .resident-nav{overflow-x:hidden;justify-content:space-around}.resident-nav button{min-width:0;flex:1 1 0;max-width:25%}
 @media(max-width:720px){.admin-mobile-more{overflow-x:hidden;flex-wrap:wrap}.admin-mobile-more button{white-space:normal}.table-wrap{max-width:100%;overflow-x:hidden}.report-donut-layout{flex-direction:column}.report-legend{width:100%}.fuel-period-details table{min-width:0;width:100%;font-size:10px}.fuel-period-details th,.fuel-period-details td{padding:8px 4px;overflow-wrap:anywhere}.fuel-period-details .table-wrap{overflow-x:hidden}.resident-report-grid .report-bars{min-width:0}}
+
+/* Heating efficiency: readable two-metric cards and responsive charts without sideways scrolling. */
+.fuel-insights{min-width:0;max-width:100%;margin:18px 0 26px;padding:19px;background:#fff;border:1px solid #dce8eb;border-radius:19px;overflow:hidden}
+.fuel-insights-head{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:16px}
+.fuel-insights-head h3{font-size:19px;color:#1a4555;letter-spacing:-.025em;margin:0 0 7px}
+.fuel-insights-head p{font-size:12px;line-height:1.55;max-width:580px;margin:0}
+.fuel-insights-year{display:grid;gap:6px;flex:none;font-size:11px;font-weight:750;color:#617985}
+.fuel-insights-year select{max-width:100%;padding:10px 12px;border-radius:10px;border:1px solid #cbdce2;background:white;color:#23495a}
+.fuel-insights-metrics{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;margin:14px 0 19px}
+.fuel-insights-metrics article{min-width:0;padding:19px 17px;border:1px solid #dce9ed;border-radius:16px;background:#f6fafb;display:grid;gap:9px}
+.fuel-insights-metrics small{font-size:12px;color:#5e7b88;font-weight:750}
+.fuel-insights-metrics strong{font-size:clamp(20px,3vw,30px);color:#124b58;line-height:1.2;letter-spacing:-.035em;font-variant-numeric:tabular-nums;overflow-wrap:anywhere}
+.fuel-insights-metrics span{font-size:11px;color:#7a8d98;line-height:1.5}
+.fuel-insights-charts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:14px}
+.fuel-insights-charts>div{min-width:0;max-width:100%;overflow:hidden;background:#fbfcfd;border:1px solid #e4edf0;border-radius:14px;padding:13px}
+.fuel-insights-charts h4{font-size:13px;color:#335b6a;margin:0 0 11px}
+.fuel-insights-note{font-size:11px;line-height:1.6;color:#718590;margin:16px 0 0}
+@media(max-width:720px){.fuel-insights{padding:14px 11px;margin:14px 0}.fuel-insights-charts{grid-template-columns:minmax(0,1fr)}.fuel-insights-metrics{gap:8px}.fuel-insights-metrics article{padding:14px 10px}.fuel-insights-metrics strong{font-size:clamp(17px,5vw,23px)}.fuel-insights-head{gap:10px}.fuel-insights-year{width:100%}.fuel-insights-year select{width:100%}}
+@media(max-width:350px){.fuel-insights-metrics{grid-template-columns:minmax(0,1fr)}}
