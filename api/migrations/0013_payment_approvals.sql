@@ -15,3 +15,6 @@ CREATE TABLE IF NOT EXISTS payment_declarations (
 );
 CREATE INDEX IF NOT EXISTS idx_payment_declarations_status ON payment_declarations(status,created_at DESC);
 CREATE UNIQUE INDEX IF NOT EXISTS idx_pending_common_declaration ON payment_declarations(apartment_id,month) WHERE kind='common' AND status='pending';
+
+ALTER TABLE payments ADD COLUMN source_declaration_id TEXT;
+CREATE UNIQUE INDEX IF NOT EXISTS idx_payment_declaration_source ON payments(source_declaration_id) WHERE source_declaration_id IS NOT NULL;
