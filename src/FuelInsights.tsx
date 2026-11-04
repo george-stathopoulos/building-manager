@@ -2,7 +2,6 @@ import {useMemo,useState} from 'react';
 import {FlexibleChart,PeriodComparison} from './FlexibleChart';
 import type {FuelResponse,FuelAccountView,FuelPeriodView} from './ResidentFeatures';
 
-type FuelPoint={label:string;value:number};
 const num=(v:number,d=2)=>v.toLocaleString('el-GR',{maximumFractionDigits:d});
 const allPeriods=(a:FuelAccountView):FuelPeriodView[]=>[...a.historical_periods,...a.periods];
 export function FuelInsights({fuel,account,year:externalYear,onYearChange,compact=false}:{fuel:FuelResponse|null;account?:FuelAccountView;year?:string;onYearChange?:(y:string)=>void;compact?:boolean}){
