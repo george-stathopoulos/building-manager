@@ -57,6 +57,9 @@ jobs:
           NODE
       - name: Εφαρμογή αλλαγών βάσης
         run: npx wrangler d1 migrations apply building-manager-db --remote
+      - name: Έλεγχος σχήματος ειδοποιήσεων
+        run: |
+          npx wrangler d1 execute building-manager-db --remote --command "SELECT name,sql FROM sqlite_master WHERE name IN ('payment_declarations','payment_notification_reads');"
       - name: Δημοσίευση API
         run: npx wrangler deploy
       - name: Δημιουργία αρχικού διαχειριστή
