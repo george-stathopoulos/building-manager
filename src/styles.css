@@ -68,3 +68,21 @@ input:disabled,select:disabled,textarea:disabled{background:#f4f6f8;color:#72839
 .resident-nav{justify-content:flex-start;overflow-x:auto;scrollbar-width:thin;-webkit-overflow-scrolling:touch}
 .resident-nav button{flex:0 0 calc(100% / 6);max-width:none}
 @media(min-width:700px){.resident-report-grid{grid-template-columns:repeat(2,minmax(0,1fr))}.resident-report-grid .report-card:first-child{grid-column:span 2}.resident-nav{justify-content:center}.resident-nav button{flex:0 1 120px}}
+
+/* Shared payment status indicators — same semantics for admin and residents. */
+.payment-badge{display:inline-flex;align-items:center;gap:6px;padding:5px 9px;border-radius:999px;font-size:12px;font-weight:700;line-height:1.3;white-space:nowrap;border:1px solid transparent}
+.payment-badge-icon{display:inline-flex;align-items:center;justify-content:center;width:17px;height:17px;border-radius:50%;font-size:12px;font-weight:800;background:currentColor}
+.payment-badge-icon::first-letter{color:inherit}
+.payment-badge--paid{color:#126947;background:#e5f6ed;border-color:#b9e5ca}
+.payment-badge--partial{color:#895900;background:#fff5d9;border-color:#ecd58b}
+.payment-badge--unpaid{color:#9b2932;background:#ffeaec;border-color:#f3c1c7}
+.payment-badge--none{color:#556474;background:#eef2f5;border-color:#d7e0e5}
+.payment-badge--paid .payment-badge-icon{background:#126947;color:white}
+.payment-badge--partial .payment-badge-icon{background:#895900;color:white}
+.payment-badge--unpaid .payment-badge-icon{background:#9b2932;color:white}
+.payment-badge--none .payment-badge-icon{background:#556474;color:white}
+.payment-summary-cell{display:flex;flex-direction:column;align-items:flex-start;gap:5px}
+.payment-summary-cell small,.payment-remaining{display:block;font-size:11px;color:#657a89;margin-top:5px}
+.resident-payment-inline{display:flex;align-items:flex-end;flex-direction:column;gap:5px;min-width:0}
+.resident-payment-inline strong{white-space:nowrap}
+@media(max-width:480px){.payment-badge{font-size:11px;padding:4px 7px}.resident-line{align-items:flex-start}.resident-payment-inline{max-width:60%}}
