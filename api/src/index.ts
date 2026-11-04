@@ -12,7 +12,7 @@ function same(a:string,b:string){if(a.length!==b.length)return false;let diff=0;
 function permittedOrigin(req:Request,env:Env){const o=req.headers.get('Origin');return !o||o===env.WEB_ORIGIN||o==='http://localhost:5173';}
 function response(req:Request,env:Env,obj:unknown,status=200){const origin=req.headers.get('Origin');const headers=new Headers({'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store','X-Content-Type-Options':'nosniff','Vary':'Origin'});if(origin&&permittedOrigin(req,env)){headers.set('Access-Control-Allow-Origin',origin);headers.set('Access-Control-Allow-Headers','Content-Type, Authorization');headers.set('Access-Control-Allow-Methods','GET, POST, OPTIONS');}return new Response(JSON.stringify(obj),{status,headers});}
 function fail(req:Request,env:Env,message:string,status=400){return response(req,env,{error:message},status);}
-function validPin(pin:unknown):pin is string{return typeof pin==='string'&&/^\\d{4}$/.test(pin);}
+function validPin(pin:unknown):pin is string{return typeof pin==='string'&&/^\d{4}$/.test(pin);}
 function defaultPin(code:string){const i=['A1','A2','A3','B1','B2','B3'].indexOf(code);return i<0?null:String(i+1).padStart(4,'0');}
 type PinCredential={apartment_id:string;user_id:string;salt:string;pin_hash:string;must_change:number};
 async function pinCredential(env:Env,apartmentId:string){return env.DB.prepare('SELECT * FROM apartment_pin_credentials WHERE apartment_id=?').bind(apartmentId).first<PinCredential>();}
