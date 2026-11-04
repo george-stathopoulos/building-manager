@@ -129,6 +129,16 @@ function App(){
  async function refresh(){try{const account=await request<{must_change:boolean}>('/account');if(account.must_change){setMustChangePin(true);setTab('account');return;}setMustChangePin(false);const x=await request<Overview>('/overview');setData(x);setStatus('');if(x.role==='admin'){await Promise.all([loadStatements(),loadPaymentSummaries(),loadFuelAccounts(),loadAnnouncements()]);await loadAudit();}else{setSavedStatements([]);await Promise.all([loadPaymentSummaries(),loadFuelAccounts(),loadAnnouncements()]);}}catch(e){setStatus((e as Error).message);}}
  useEffect(()=>{if(!configured)return;request<{configured:boolean}>('/bootstrap/status').then(r=>setIsConfigured(r.configured)).catch(()=>setIsConfigured(null));if(authenticated())refresh();},[]);
  useEffect(()=>{if(authenticated()&&selectedPaymentMonth)loadStatementPayments(selectedPaymentMonth);},[selectedPaymentMonth]);
+ // Refresh unread announcement counts when a resident returns to the installed PWA.
+ useEffect(()=>{
+  if(!data||!authenticated())return;
+  const update=()=>{if(document.visibilityState==='visible')request<AnnouncementsResponse>('/announcements').then(setAnnouncements).catch(()=>{});};
+  const timer=window.setInterval(update,60000);
+  window.addEventListener('focus',update);
+  document.addEventListener('visibilitychange',update);
+  return()=>{window.clearInterval(timer);window.removeEventListener('focus',update);document.removeEventListener('visibilitychange',update);};
+ },[data]);
+
  async function doAuth(e:FormEvent){e.preventDefault();setLoading(true);setStatus('');try{
  const endpoint=loginMode==='resident'?'/pin/login':'/login';
  const args=loginMode==='resident'?{apartment_code:pinApartment,pin:loginPin}:{email:authEmail,password};
