@@ -99,6 +99,15 @@ jobs:
             if(!body.token)throw Error('Login did not return session token');
             const overview=await fetch(base+'/api/overview',{headers:{Authorization:'Bearer '+body.token,'Origin':'https://george-stathopoulos.github.io'}});
             if(!overview.ok)throw Error('Overview failed: HTTP '+overview.status);
-            console.log('Admin login and overview passed');
+            const authHeaders={Authorization:'Bearer '+body.token,'Origin':'https://george-stathopoulos.github.io'};
+            const fuel=await fetch(base+'/api/fuel/accounts',{headers:authHeaders});
+            if(!fuel.ok)throw Error('Fuel accounts failed: HTTP '+fuel.status);
+            const fuelData=await fuel.json();
+            if(!Array.isArray(fuelData.accounts)||fuelData.accounts.length!==6)throw Error('Fuel accounts must list six apartments for admin');
+            const announcement=await fetch(base+'/api/announcements',{headers:authHeaders});
+            if(!announcement.ok)throw Error('Announcements failed: HTTP '+announcement.status);
+            const announcementData=await announcement.json();
+            if(!Array.isArray(announcementData.announcements))throw Error('Announcements response invalid');
+            console.log('Admin login, overview, fuel accounts and announcements passed');
           })().catch(e=>{console.error(e.message);process.exit(1)});
           NODE
