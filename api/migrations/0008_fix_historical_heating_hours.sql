@@ -1,0 +1,33 @@
+-- Convert historical heating hour-meter values from hundredths of an hour to hours.
+-- Only update exact values from migration 0005: preserves resident/admin edits and newer readings.
+UPDATE heating_readings SET reading=1946.48 WHERE measured_on='2025-12-08' AND reading=194648 AND apartment_id=(SELECT id FROM apartments WHERE code='A1');
+UPDATE heating_readings SET reading=639.42 WHERE measured_on='2025-12-08' AND reading=63942 AND apartment_id=(SELECT id FROM apartments WHERE code='A2');
+UPDATE heating_readings SET reading=2070.91 WHERE measured_on='2025-12-08' AND reading=207091 AND apartment_id=(SELECT id FROM apartments WHERE code='A3');
+UPDATE heating_readings SET reading=1543.63 WHERE measured_on='2025-12-08' AND reading=154363 AND apartment_id=(SELECT id FROM apartments WHERE code='B1');
+UPDATE heating_readings SET reading=2999.05 WHERE measured_on='2025-12-08' AND reading=299905 AND apartment_id=(SELECT id FROM apartments WHERE code='B2');
+UPDATE heating_readings SET reading=3648.77 WHERE measured_on='2025-12-08' AND reading=364877 AND apartment_id=(SELECT id FROM apartments WHERE code='B3');
+UPDATE heating_readings SET reading=1982.98 WHERE measured_on='2026-01-13' AND reading=198298 AND apartment_id=(SELECT id FROM apartments WHERE code='A1');
+UPDATE heating_readings SET reading=641.06 WHERE measured_on='2026-01-13' AND reading=64106 AND apartment_id=(SELECT id FROM apartments WHERE code='A2');
+UPDATE heating_readings SET reading=2105.45 WHERE measured_on='2026-01-13' AND reading=210545 AND apartment_id=(SELECT id FROM apartments WHERE code='A3');
+UPDATE heating_readings SET reading=1576.84 WHERE measured_on='2026-01-13' AND reading=157684 AND apartment_id=(SELECT id FROM apartments WHERE code='B1');
+UPDATE heating_readings SET reading=2999.05 WHERE measured_on='2026-01-13' AND reading=299905 AND apartment_id=(SELECT id FROM apartments WHERE code='B2');
+UPDATE heating_readings SET reading=3707.19 WHERE measured_on='2026-01-13' AND reading=370719 AND apartment_id=(SELECT id FROM apartments WHERE code='B3');
+UPDATE heating_readings SET reading=1998.14 WHERE measured_on='2026-01-20' AND reading=199814 AND apartment_id=(SELECT id FROM apartments WHERE code='A1');
+UPDATE heating_readings SET reading=641.06 WHERE measured_on='2026-01-20' AND reading=64106 AND apartment_id=(SELECT id FROM apartments WHERE code='A2');
+UPDATE heating_readings SET reading=2120.54 WHERE measured_on='2026-01-20' AND reading=212054 AND apartment_id=(SELECT id FROM apartments WHERE code='A3');
+UPDATE heating_readings SET reading=1589.56 WHERE measured_on='2026-01-20' AND reading=158956 AND apartment_id=(SELECT id FROM apartments WHERE code='B1');
+UPDATE heating_readings SET reading=2999.05 WHERE measured_on='2026-01-20' AND reading=299905 AND apartment_id=(SELECT id FROM apartments WHERE code='B2');
+UPDATE heating_readings SET reading=3724.73 WHERE measured_on='2026-01-20' AND reading=372473 AND apartment_id=(SELECT id FROM apartments WHERE code='B3');
+UPDATE heating_readings SET reading=2087.98 WHERE measured_on='2026-03-26' AND reading=208798 AND apartment_id=(SELECT id FROM apartments WHERE code='A1');
+UPDATE heating_readings SET reading=642.27 WHERE measured_on='2026-03-26' AND reading=64227 AND apartment_id=(SELECT id FROM apartments WHERE code='A2');
+UPDATE heating_readings SET reading=2188.87 WHERE measured_on='2026-03-26' AND reading=218887 AND apartment_id=(SELECT id FROM apartments WHERE code='A3');
+UPDATE heating_readings SET reading=1636.10 WHERE measured_on='2026-03-26' AND reading=163610 AND apartment_id=(SELECT id FROM apartments WHERE code='B1');
+UPDATE heating_readings SET reading=2999.05 WHERE measured_on='2026-03-26' AND reading=299905 AND apartment_id=(SELECT id FROM apartments WHERE code='B2');
+UPDATE heating_readings SET reading=3846.24 WHERE measured_on='2026-03-26' AND reading=384624 AND apartment_id=(SELECT id FROM apartments WHERE code='B3');
+UPDATE heating_readings SET reading=2092.97 WHERE measured_on='2026-04-22' AND reading=209297 AND apartment_id=(SELECT id FROM apartments WHERE code='A1');
+UPDATE heating_readings SET reading=642.27 WHERE measured_on='2026-04-22' AND reading=64227 AND apartment_id=(SELECT id FROM apartments WHERE code='A2');
+UPDATE heating_readings SET reading=2188.87 WHERE measured_on='2026-04-22' AND reading=218887 AND apartment_id=(SELECT id FROM apartments WHERE code='A3');
+UPDATE heating_readings SET reading=1638.21 WHERE measured_on='2026-04-22' AND reading=163821 AND apartment_id=(SELECT id FROM apartments WHERE code='B1');
+UPDATE heating_readings SET reading=2999.05 WHERE measured_on='2026-04-22' AND reading=299905 AND apartment_id=(SELECT id FROM apartments WHERE code='B2');
+UPDATE heating_readings SET reading=3850.89 WHERE measured_on='2026-04-22' AND reading=385089 AND apartment_id=(SELECT id FROM apartments WHERE code='B3');
+INSERT INTO audit_events(id,actor_id,action,entity_type,entity_id,details,created_at) SELECT lower(hex(randomblob(16))),NULL,'historical_heating_scale_corrected','heating_readings','2025-12-08_to_2026-04-22','{"source":"Sheet1","reason":"Historical meter readings were stored in hundredths of hours; converted imported values by /100","dates":"2025-12-08,2026-01-13,2026-01-20,2026-03-26,2026-04-22"}',datetime('now') WHERE NOT EXISTS(SELECT 1 FROM audit_events WHERE action='historical_heating_scale_corrected' AND entity_id='2025-12-08_to_2026-04-22');
