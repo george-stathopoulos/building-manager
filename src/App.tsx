@@ -2,10 +2,11 @@ import { Fragment, useEffect, useMemo, useState, type FormEvent } from 'react';
 import {configured,authenticated,saveToken,clearToken,request,type Overview} from './api';
 import {money} from './accounting';
 import {BarGraph,LineGraph,DonutGraph,ReportCard} from './ReportCharts';
-type Tab='home'|'expenses'|'heating'|'payments'|'residents'|'history'|'reports'|'account';
+import {FuelAccountSummary,AnnouncementFeed,type FuelResponse,type AnnouncementsResponse} from './ResidentFeatures';
+type Tab='home'|'expenses'|'heating'|'announcements'|'payments'|'residents'|'history'|'reports'|'account';
 const apartmentCodes=['A1','A2','A3','B1','B2','B3'];
 const demo:Overview={role:'admin',email:'',my_apartments:[],apartments:apartmentCodes.map((code,i)=>({id:String(i),code,heating_share:[19.25,14,16.75,19.25,14,16.75][i],common_share:1})),expenses:[],payments:[],readings:[],fuel_deliveries:[],tank:null,tank_history:[]};
-const navigation:{id:Tab;name:string;icon:string}[]=[{id:'home',name:'Αρχική',icon:'⌂'},{id:'expenses',name:'Κοινόχρηστα',icon:'▤'},{id:'heating',name:'Θέρμανση',icon:'♨'},{id:'payments',name:'Πληρωμές',icon:'€'},{id:'residents',name:'Κάτοικοι',icon:'♙'},{id:'history',name:'Ιστορικό',icon:'◷'},{id:'reports',name:'Αναφορές',icon:'▥'},{id:'account',name:'Λογαριασμός',icon:'⚙'}];
+const navigation:{id:Tab;name:string;icon:string}[]=[{id:'home',name:'Αρχική',icon:'⌂'},{id:'expenses',name:'Κοινόχρηστα',icon:'▤'},{id:'heating',name:'Θέρμανση',icon:'♨'},{id:'announcements',name:'Ανακοινώσεις',icon:'♧'},{id:'payments',name:'Πληρωμές',icon:'€'},{id:'residents',name:'Κάτοικοι',icon:'♙'},{id:'history',name:'Ιστορικό',icon:'◷'},{id:'reports',name:'Αναφορές',icon:'▥'},{id:'account',name:'Λογαριασμός',icon:'⚙'}];
 const amount=(v:string)=>Math.round(Number(v.replace(',','.'))*100);
 const nowMonth=()=>new Date().toISOString().slice(0,7);
 const historicalElectricityNotes:Record<string,string>={
@@ -61,8 +62,37 @@ function App(){
  const [paymentBusy,setPaymentBusy]=useState<string|null>(null);
  type MonthSummary={month:string;due_cents:number;paid_cents:number;balance_cents:number;paid_count:number;apartment_count:number;apartments:Array<{apartment_code:string;due_cents:number;paid_cents:number;balance_cents:number;paid:boolean;paid_on:string|null}>};
  const [paymentSummaries,setPaymentSummaries]=useState<MonthSummary[]>([]);
+ const [fuelAccounts,setFuelAccounts]=useState<FuelResponse|null>(null);
+ const [announcements,setAnnouncements]=useState<AnnouncementsResponse|null>(null);
+ const [announcementTitle,setAnnouncementTitle]=useState('');
+ const [announcementBody,setAnnouncementBody]=useState('');
+ const [fuelEditAccount,setFuelEditAccount]=useState('A1');
+ const [fuelSettingCm,setFuelSettingCm]=useState('20');
+ const [fuelSettingPrice,setFuelSettingPrice]=useState('1');
+ const [fuelOpeningDate,setFuelOpeningDate]=useState('2026-04-22');
+ const [fuelOpeningDeposited,setFuelOpeningDeposited]=useState('500');
+ const [fuelOpeningSpent,setFuelOpeningSpent]=useState('0');
+ const [fuelOpeningNote,setFuelOpeningNote]=useState('');
+ const [fuelOpeningConfirmed,setFuelOpeningConfirmed]=useState(false);
+ useEffect(()=>{
+  const account=fuelAccounts?.accounts.find(a=>a.apartment_code===fuelEditAccount);
+  if(!account)return;
+  const opening=account.opening,legacy=account.legacy;
+  setFuelOpeningDate(opening?.as_of||legacy?.as_of||'2025-12-08');
+  setFuelOpeningDeposited(String((opening?.deposited_cents??legacy?.reported_deposited_cents??0)/100));
+  setFuelOpeningSpent(String((opening?.estimated_consumed_cents??legacy?.reported_estimated_consumed_cents??0)/100));
+  setFuelOpeningNote(opening?.note||'Από ιστορικό φύλλο 22/04/2026 — απαιτείται επιβεβαίωση παραστατικών.');
+  setFuelOpeningConfirmed(false);
+ },[fuelEditAccount,fuelAccounts]);
  const [selectedApartments,setSelectedApartments]=useState<string[]>([]);
  async function loadPaymentSummaries(){try{const r=await request<{months:MonthSummary[]}>('/statements/summary');setPaymentSummaries(r.months);}catch(e){setStatus((e as Error).message);}}
+ async function loadFuelAccounts(){try{
+  const r=await request<FuelResponse>('/fuel/accounts');setFuelAccounts(r);
+  setFuelSettingCm(String(r.settings.liters_per_cm));setFuelSettingPrice(String(r.settings.price_cents_per_liter/100));
+ }catch(e){setStatus((e as Error).message);}}
+ async function loadAnnouncements(){try{setAnnouncements(await request<AnnouncementsResponse>('/announcements'));}catch(e){setStatus((e as Error).message);}}
+ async function readAnnouncement(id:string){try{await request('/announcements/read',{method:'POST',body:JSON.stringify({id})});await loadAnnouncements();}catch(e){setStatus((e as Error).message);}}
+ async function archiveAnnouncement(id:string){if(!window.confirm('Να αρχειοθετηθεί η ανακοίνωση;'))return;setLoading(true);try{await request('/announcements/archive',{method:'POST',body:JSON.stringify({id})});await loadAnnouncements();}catch(e){setStatus((e as Error).message);}finally{setLoading(false);}}
  async function bulkPayment(paid:boolean){if(!selectedPaymentMonth||!selectedApartments.length)return;setPaymentBusy('bulk');setStatus('');try{await request('/statements/payments/batch',{method:'POST',body:JSON.stringify({month:selectedPaymentMonth,apartment_codes:selectedApartments,paid})});setSelectedApartments([]);await Promise.all([loadStatementPayments(selectedPaymentMonth),loadPaymentSummaries()]);}catch(e){setStatus((e as Error).message);}finally{setPaymentBusy(null);}}
 
  async function loadStatementPayments(m:string){if(!m){setStatementPayments([]);return;}try{const result=await request<{apartments:typeof statementPayments}>('/statements/payments?month='+encodeURIComponent(m));setStatementPayments(result.apartments);}catch(e){setStatus((e as Error).message);}}
@@ -96,13 +126,13 @@ function App(){
  const [inviteEmail,setInviteEmail]=useState('');
  const [inviteApartment,setInviteApartment]=useState('A1');
  const [residentPassword,setResidentPassword]=useState('');
- async function refresh(){try{const account=await request<{must_change:boolean}>('/account');if(account.must_change){setMustChangePin(true);setTab('account');return;}setMustChangePin(false);const x=await request<Overview>('/overview');setData(x);setStatus('');if(x.role==='admin'){await Promise.all([loadStatements(),loadPaymentSummaries()]);await loadAudit();}else{setSavedStatements([]);await loadPaymentSummaries();}}catch(e){setStatus((e as Error).message);}}
+ async function refresh(){try{const account=await request<{must_change:boolean}>('/account');if(account.must_change){setMustChangePin(true);setTab('account');return;}setMustChangePin(false);const x=await request<Overview>('/overview');setData(x);setStatus('');if(x.role==='admin'){await Promise.all([loadStatements(),loadPaymentSummaries(),loadFuelAccounts(),loadAnnouncements()]);await loadAudit();}else{setSavedStatements([]);await Promise.all([loadPaymentSummaries(),loadFuelAccounts(),loadAnnouncements()]);}}catch(e){setStatus((e as Error).message);}}
  useEffect(()=>{if(!configured)return;request<{configured:boolean}>('/bootstrap/status').then(r=>setIsConfigured(r.configured)).catch(()=>setIsConfigured(null));if(authenticated())refresh();},[]);
  useEffect(()=>{if(authenticated()&&selectedPaymentMonth)loadStatementPayments(selectedPaymentMonth);},[selectedPaymentMonth]);
  async function doAuth(e:FormEvent){e.preventDefault();setLoading(true);setStatus('');try{
  const endpoint=loginMode==='resident'?'/pin/login':'/login';
  const args=loginMode==='resident'?{apartment_code:pinApartment,pin:loginPin}:{email:authEmail,password};
- const r=await request<{token:string;must_change?:boolean}>(endpoint,{method:'POST',body:JSON.stringify(args)});saveToken(r.token);setPassword('');setLoginPin('');setMustChangePin(Boolean(r.must_change));if(r.must_change){setTab('account');}else await refresh();
+ const r=await request<{token:string;must_change?:boolean}>(endpoint,{method:'POST',body:JSON.stringify(args)});saveToken(r.token);setFuelAccounts(null);setAnnouncements(null);setPassword('');setLoginPin('');setMustChangePin(Boolean(r.must_change));if(r.must_change){setTab('account');}else await refresh();
  }catch(err){setStatus((err as Error).message);}finally{setLoading(false);}}
  async function saveNewPin(e:FormEvent){e.preventDefault();setLoading(true);setStatus('');try{const r=await request<{token:string}>('/account/pin',{method:'POST',body:JSON.stringify({current_pin:currentPin,pin:newPin,confirm_pin:confirmPin})});saveToken(r.token);setCurrentPin('');setNewPin('');setConfirmPin('');setMustChangePin(false);setStatus('Το PIN ενημερώθηκε.');await refresh();}catch(err){setStatus((err as Error).message);}finally{setLoading(false);}}
  async function loadPins(){try{const r=await request<{apartments:typeof pinRows}>('/admin/pins');setPinRows(r.apartments);}catch(err){setStatus((err as Error).message);}}
