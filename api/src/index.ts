@@ -131,6 +131,19 @@ export default {
     const rows=(await env.DB.prepare('SELECT month,address,method,items_json,names_json,created_at,updated_at FROM monthly_statements ORDER BY month DESC').all()).results;
     return response(req,env,{statements:rows.map((r:any)=>({month:r.month,address:r.address,method:r.method,items:JSON.parse(r.items_json),names:JSON.parse(r.names_json),created_at:r.created_at,updated_at:r.updated_at}))});
    }
+   if(path==='/api/statements/detail'&&method==='GET'){
+    const month=url.searchParams.get('month');
+    if(!validMonth(month))return fail(req,env,'Επιλέξτε έγκυρο μήνα.');
+    const statement=await env.DB.prepare('SELECT month,address,method,items_json FROM monthly_statements WHERE month=?').bind(month).first<{month:string;address:string;method:string;items_json:string}>();
+    if(!statement)return fail(req,env,'Η κατάσταση κοινοχρήστων δεν βρέθηκε.',404);
+    const own=await myApartmentIds(env,user);
+    const apartments=(await env.DB.prepare('SELECT id,code,common_weight,heating_share_bp FROM apartments ORDER BY code').all<Apartment>()).results;
+    const items=JSON.parse(statement.items_json) as Array<{name:string;amount_cents:number}>;
+    const total=items.reduce((n,x)=>n+x.amount_cents,0);
+    const allocations=allocate(total,apartments,statement.method);
+    const selected=apartments.filter(a=>!own||own.includes(a.id)).map(a=>({apartment_code:a.code,due_cents:allocations[apartments.findIndex(x=>x.id===a.id)]}));
+    return response(req,env,{month:statement.month,address:statement.address,items,total_cents:total,apartments:selected});
+   }
    if(path==='/api/statements/summary'&&method==='GET'){
     const own=await myApartmentIds(env,user);
     const apartments=(await env.DB.prepare('SELECT id,code,common_weight,heating_share_bp FROM apartments ORDER BY code').all<Apartment>()).results;
