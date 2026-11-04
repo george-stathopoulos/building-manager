@@ -2,10 +2,10 @@ import { useEffect, useMemo, useState, type FormEvent } from 'react';
 import {configured,authenticated,saveToken,clearToken,request,type Overview} from './api';
 import {money} from './accounting';
 import {BarGraph,LineGraph,DonutGraph,ReportCard} from './ReportCharts';
-type Tab='home'|'expenses'|'heating'|'payments'|'residents'|'history'|'reports';
+type Tab='home'|'expenses'|'heating'|'payments'|'residents'|'history'|'reports'|'account';
 const apartmentCodes=['A1','A2','A3','B1','B2','B3'];
 const demo:Overview={role:'admin',email:'',my_apartments:[],apartments:apartmentCodes.map((code,i)=>({id:String(i),code,heating_share:[19.25,14,16.75,19.25,14,16.75][i],common_share:1})),expenses:[],payments:[],readings:[],fuel_deliveries:[],tank:null,tank_history:[]};
-const navigation:{id:Tab;name:string;icon:string}[]=[{id:'home',name:'Αρχική',icon:'⌂'},{id:'expenses',name:'Κοινόχρηστα',icon:'▤'},{id:'heating',name:'Θέρμανση',icon:'♨'},{id:'payments',name:'Πληρωμές',icon:'€'},{id:'residents',name:'Κάτοικοι',icon:'♙'},{id:'history',name:'Ιστορικό',icon:'◷'},{id:'reports',name:'Αναφορές',icon:'▥'}];
+const navigation:{id:Tab;name:string;icon:string}[]=[{id:'home',name:'Αρχική',icon:'⌂'},{id:'expenses',name:'Κοινόχρηστα',icon:'▤'},{id:'heating',name:'Θέρμανση',icon:'♨'},{id:'payments',name:'Πληρωμές',icon:'€'},{id:'residents',name:'Κάτοικοι',icon:'♙'},{id:'history',name:'Ιστορικό',icon:'◷'},{id:'reports',name:'Αναφορές',icon:'▥'},{id:'account',name:'Λογαριασμός',icon:'⚙'}];
 const amount=(v:string)=>Math.round(Number(v.replace(',','.'))*100);
 const nowMonth=()=>new Date().toISOString().slice(0,7);
 function App(){
@@ -17,6 +17,16 @@ function App(){
  
  const [authEmail,setAuthEmail]=useState('');
  const [password,setPassword]=useState('');
+ const [loginMode,setLoginMode]=useState<'resident'|'admin'>('resident');
+ const [pinApartment,setPinApartment]=useState('A1');
+ const [loginPin,setLoginPin]=useState('');
+ const [currentPin,setCurrentPin]=useState('');
+ const [newPin,setNewPin]=useState('');
+ const [confirmPin,setConfirmPin]=useState('');
+ const [mustChangePin,setMustChangePin]=useState(false);
+ const [pinRows,setPinRows]=useState<Array<{code:string;activated:boolean;must_change:boolean;updated_at:string|null}>>([]);
+ const [resetApartment,setResetApartment]=useState('A1');
+ const [resetPin,setResetPin]=useState('0001');
 
 
  const [month,setMonth]=useState(nowMonth());
@@ -67,14 +77,17 @@ function App(){
  const [inviteEmail,setInviteEmail]=useState('');
  const [inviteApartment,setInviteApartment]=useState('A1');
  const [residentPassword,setResidentPassword]=useState('');
- async function refresh(){try{const x=await request<Overview>('/overview');setData(x);setStatus('');await Promise.all([loadStatements(),loadPaymentSummaries()]);if(x.role==='admin')await loadAudit();}catch(e){setStatus((e as Error).message);}}
+ async function refresh(){try{const account=await request<{must_change:boolean}>('/account');if(account.must_change){setMustChangePin(true);setTab('account');return;}setMustChangePin(false);const x=await request<Overview>('/overview');setData(x);setStatus('');await Promise.all([loadStatements(),loadPaymentSummaries()]);if(x.role==='admin')await loadAudit();}catch(e){setStatus((e as Error).message);}}
  useEffect(()=>{if(!configured)return;request<{configured:boolean}>('/bootstrap/status').then(r=>setIsConfigured(r.configured)).catch(()=>setIsConfigured(null));if(authenticated())refresh();},[]);
  useEffect(()=>{if(authenticated()&&selectedPaymentMonth)loadStatementPayments(selectedPaymentMonth);},[selectedPaymentMonth]);
  async function doAuth(e:FormEvent){e.preventDefault();setLoading(true);setStatus('');try{
- const endpoint='/login';
- const args={email:authEmail,password};
- const r=await request<{token:string}>(endpoint,{method:'POST',body:JSON.stringify(args)});saveToken(r.token);setPassword('');await refresh();
+ const endpoint=loginMode==='resident'?'/pin/login':'/login';
+ const args=loginMode==='resident'?{apartment_code:pinApartment,pin:loginPin}:{email:authEmail,password};
+ const r=await request<{token:string;must_change?:boolean}>(endpoint,{method:'POST',body:JSON.stringify(args)});saveToken(r.token);setPassword('');setLoginPin('');setMustChangePin(Boolean(r.must_change));if(r.must_change){setTab('account');}else await refresh();
  }catch(err){setStatus((err as Error).message);}finally{setLoading(false);}}
+ async function saveNewPin(e:FormEvent){e.preventDefault();setLoading(true);setStatus('');try{const r=await request<{token:string}>('/account/pin',{method:'POST',body:JSON.stringify({current_pin:currentPin,pin:newPin,confirm_pin:confirmPin})});saveToken(r.token);setCurrentPin('');setNewPin('');setConfirmPin('');setMustChangePin(false);setStatus('Το PIN ενημερώθηκε.');await refresh();}catch(err){setStatus((err as Error).message);}finally{setLoading(false);}}
+ async function loadPins(){try{const r=await request<{apartments:typeof pinRows}>('/admin/pins');setPinRows(r.apartments);}catch(err){setStatus((err as Error).message);}}
+ async function resetResidentPin(e:FormEvent){e.preventDefault();setLoading(true);setStatus('');try{await request('/admin/pins/reset',{method:'POST',body:JSON.stringify({apartment_code:resetApartment,pin:resetPin})});setStatus('Το προσωρινό PIN ορίστηκε. Ο κάτοικος πρέπει να το αλλάξει στην επόμενη σύνδεση.');await loadPins();}catch(err){setStatus((err as Error).message);}finally{setLoading(false);}}
  async function submit(path:string,payload:object,after:()=>void){setLoading(true);setStatus('');try{await request(path,{method:'POST',body:JSON.stringify(payload)});after();await refresh();}catch(e){setStatus((e as Error).message);}finally{setLoading(false);}}
  const requiredMonths=useMemo(()=>{const months:string[]=[];const today=new Date();const end=today.getFullYear()*12+today.getMonth();for(let n=2026*12+9;n<=end;n++){const year=Math.floor(n/12),month=n%12+1;months.push(year+'-'+String(month).padStart(2,'0'));}return months;},[]);
  const missingCommonMonths=requiredMonths.filter(m=>!savedStatements.some(st=>st.month===m));
@@ -107,18 +120,15 @@ function App(){
  const totalFuelLiters=fuelDeliveries.reduce((n,x)=>n+x.liters,0);
  const totalFuelCost=fuelDeliveries.reduce((n,x)=>n+x.cost_cents,0)/100;
  const isAdmin=data?.role==='admin';
- if(configured&&!data)return <main className="auth-page"><section className="auth-card">
+ if(configured&&!data&&!mustChangePin)return <main className="auth-page"><section className="auth-card">
  <div className="brand-mark">⌂</div><h1>Διαχείριση Πολυκατοικίας</h1><p className="muted">Ασφαλής πρόσβαση διαχειριστή και κατοίκων</p>
  {isConfigured===false&&<div className="notice">Ο λογαριασμός διαχειριστή δεν έχει ενεργοποιηθεί ακόμη.</div>}
- <form onSubmit={doAuth} className="stack">
- <label>Ηλεκτρονική διεύθυνση<input type="email" required value={authEmail} onChange={e=>setAuthEmail(e.target.value)}/></label>
- <label>Κωδικός πρόσβασης<input type="password" minLength={12} required value={password} onChange={e=>setPassword(e.target.value)}/></label>
- 
- <button disabled={loading}>{loading?'Παρακαλώ περιμένετε…':'Σύνδεση'}</button>
- </form>
+ <div className="auth-mode"><button type="button" className={loginMode==='resident'?'selected':''} onClick={()=>{setLoginMode('resident');setStatus('');}}>Κάτοικος</button><button type="button" className={loginMode==='admin'?'selected':''} onClick={()=>{setLoginMode('admin');setStatus('');}}>Διαχειριστής</button></div>
+ <form onSubmit={doAuth} className="stack">{loginMode==='resident'?<><label>Διαμέρισμα<select value={pinApartment} onChange={e=>setPinApartment(e.target.value)}>{apartmentCodes.map(code=><option key={code} value={code}>{code}</option>)}</select></label><label>PIN 4 ψηφίων<input type="password" inputMode="numeric" autoComplete="one-time-code" pattern="[0-9]{4}" minLength={4} maxLength={4} required value={loginPin} onChange={e=>setLoginPin(e.target.value.replace(/\\D/g,'').slice(0,4))}/></label></>:<><label>Ηλεκτρονική διεύθυνση<input type="email" required value={authEmail} onChange={e=>setAuthEmail(e.target.value)}/></label><label>Κωδικός πρόσβασης<input type="password" minLength={12} required value={password} onChange={e=>setPassword(e.target.value)}/></label></>}<button disabled={loading}>{loading?'Παρακαλώ περιμένετε…':'Σύνδεση'}</button></form>
 
  {status&&<p className="error" role="alert">{status}</p>}
  </section></main>;
+ if(mustChangePin)return <main className="auth-page"><section className="auth-card"><h1>Αλλαγή αρχικού PIN</h1><p className="muted">Για την ασφάλεια του διαμερίσματός σας, ορίστε προσωπικό τετραψήφιο PIN πριν συνεχίσετε.</p><form className="stack" onSubmit={saveNewPin}><label>Νέο PIN<input type="password" inputMode="numeric" pattern="[0-9]{4}" maxLength={4} required value={newPin} onChange={e=>setNewPin(e.target.value.replace(/\\D/g,'').slice(0,4))}/></label><label>Επιβεβαίωση PIN<input type="password" inputMode="numeric" pattern="[0-9]{4}" maxLength={4} required value={confirmPin} onChange={e=>setConfirmPin(e.target.value.replace(/\\D/g,'').slice(0,4))}/></label><button disabled={loading}>Αποθήκευση νέου PIN</button></form>{status&&<p className="error">{status}</p>}<button className="link" onClick={()=>{clearToken();setData(null);setMustChangePin(false);}}>Αποσύνδεση</button></section></main>;
  return <div className="shell">
  <aside className="sidebar"><div className="logo"><span className="logo-icon">⌂</span><div><strong>Η Πολυκατοικία</strong><small>Διαχείριση κτιρίου</small></div></div>
  <div className="side-label">ΜΕΝΟΥ</div><nav aria-label="Κύρια πλοήγηση">{navigation.filter(item=>isAdmin||!['residents'].includes(item.id)).map(item=><button key={item.id} onClick={()=>setTab(item.id)} className={'nav-button '+(tab===item.id?'active':'')}><span>{item.icon}</span>{item.name}</button>)}</nav>
@@ -170,7 +180,8 @@ function App(){
  <button disabled={loading}>{editingFuelId?'Αποθήκευση διορθωμένου ανεφοδιασμού':'Καταχώριση ανεφοδιασμού'}</button>{editingFuelId&&<button type="button" onClick={()=>{setEditingFuelId(null);setFuelLiters('');setFuelCost('');setFuelNote('');}}>Ακύρωση διόρθωσης</button>}</form>}
  <div className="table-wrap"><table><thead><tr><th>Ημερομηνία</th><th>Λίτρα</th><th>Κόστος</th><th>Σημειώσεις</th>{isAdmin&&<th>Ενέργεια</th>}</tr></thead><tbody>{data?.fuel_deliveries.map(f=><tr key={f.id}><td>{f.delivered_on}</td><td>{f.liters.toLocaleString('el-GR')}</td><td>{money(f.cost_cents)}</td><td>{f.note||'—'}</td>{isAdmin&&<td><button type="button" onClick={()=>editFuel(f.id)}>Διόρθωση</button></td>}</tr>)}{!data?.fuel_deliveries.length&&<tr><td colSpan={isAdmin?5:4} className="empty">Δεν υπάρχουν καταχωρισμένοι ανεφοδιασμοί.</td></tr>}</tbody></table></div></section>
  <div className="table-wrap"><table><thead><tr><th>Ημερομηνία</th><th>Διαμέρισμα</th><th>Ένδειξη</th></tr></thead><tbody>{data?.readings.map(r=><tr key={r.id}><td>{r.measured_on}</td><td>{r.apartment_code}</td><td>{r.reading.toLocaleString('el-GR')}</td></tr>)}{!data?.readings.length&&<tr><td colSpan={3} className="empty">Δεν υπάρχουν μετρήσεις.</td></tr>}</tbody></table></div></section></>}
- {tab==='residents'&&isAdmin&&<section className="panel"><h2>Λογαριασμοί κατοίκων</h2><p className="muted">Δημιουργήστε στοιχεία σύνδεσης για κάθε κάτοικο. Ο κάθε κάτοικος βλέπει μόνο το δικό του διαμέρισμα.</p>
+ {tab==='account'&&<section className="panel"><h2>Ο λογαριασμός μου</h2>{!isAdmin?<><p className="muted">Αλλάξτε το προσωπικό τετραψήφιο PIN του διαμερίσματός σας.</p><form className="form-grid" onSubmit={saveNewPin}><label>Τρέχον PIN<input type="password" inputMode="numeric" pattern="[0-9]{4}" maxLength={4} required value={currentPin} onChange={e=>setCurrentPin(e.target.value.replace(/\\D/g,'').slice(0,4))}/></label><label>Νέο PIN<input type="password" inputMode="numeric" pattern="[0-9]{4}" maxLength={4} required value={newPin} onChange={e=>setNewPin(e.target.value.replace(/\\D/g,'').slice(0,4))}/></label><label>Επιβεβαίωση νέου PIN<input type="password" inputMode="numeric" pattern="[0-9]{4}" maxLength={4} required value={confirmPin} onChange={e=>setConfirmPin(e.target.value.replace(/\\D/g,'').slice(0,4))}/></label><button disabled={loading}>Αλλαγή PIN</button></form></>:<p className="muted">Ο διαχειριστής συνεχίζει να συνδέεται με email και κωδικό πρόσβασης.</p>}</section>}
+ {tab==='residents'&&isAdmin&&<section className="panel"><h2>PIN διαμερισμάτων</h2><p className="muted">Αρχικά PIN: A1 0001, A2 0002, A3 0003, B1 0004, B2 0005, B3 0006. Με την πρώτη σύνδεση κάθε κάτοικος επιλέγει δικό του PIN. Η επαναφορά ακυρώνει τις ενεργές συνδέσεις.</p><button type="button" onClick={loadPins}>Ανανέωση κατάστασης PIN</button><div className="table-wrap"><table><thead><tr><th>Διαμέρισμα</th><th>Κατάσταση</th></tr></thead><tbody>{pinRows.map(x=><tr key={x.code}><td>{x.code}</td><td>{x.activated?'Προσωπικό PIN':'Αρχικό / προσωρινό PIN'}</td></tr>)}</tbody></table></div><form className="form-grid" onSubmit={resetResidentPin}><label>Διαμέρισμα<select value={resetApartment} onChange={e=>{setResetApartment(e.target.value);setResetPin(String(apartmentCodes.indexOf(e.target.value)+1).padStart(4,'0'));}}>{apartmentCodes.map(code=><option key={code}>{code}</option>)}</select></label><label>Νέο προσωρινό PIN<input type="text" inputMode="numeric" pattern="[0-9]{4}" maxLength={4} required value={resetPin} onChange={e=>setResetPin(e.target.value.replace(/\\D/g,'').slice(0,4))}/></label><button disabled={loading}>Επαναφορά PIN</button></form><h3>Παλαιότεροι λογαριασμοί email</h3><p className="muted">Οι ήδη υπάρχοντες λογαριασμοί email παραμένουν διαθέσιμοι.</p>
  {configured&&<form className="form-grid" onSubmit={e=>{e.preventDefault();submit('/residents',{email:inviteEmail,password:residentPassword,apartment_code:inviteApartment},()=>{setInviteEmail('');setResidentPassword('');setStatus('Ο λογαριασμός κατοίκου δημιουργήθηκε.');});}}>
  <label>Ηλεκτρονική διεύθυνση<input type="email" required value={inviteEmail} onChange={e=>setInviteEmail(e.target.value)}/></label>
  <label>Προσωρινός κωδικός πρόσβασης<input type="password" minLength={12} required value={residentPassword} onChange={e=>setResidentPassword(e.target.value)}/></label>
