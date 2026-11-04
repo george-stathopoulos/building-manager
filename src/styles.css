@@ -178,3 +178,20 @@ input:disabled,select:disabled,textarea:disabled{background:#f4f6f8;color:#72839
  .resident-header h1{font-size:18px}.resident-portal-name{font-size:18px}
  .resident-nav button small{font-size:9px}
 }
+
+/* No sideways scrolling in resident or administrator views, including charts. */
+html,body,#root{max-width:100%;overflow-x:clip}
+.report-card,.report-chart,.flexible-chart{min-width:0;max-width:100%;overflow:hidden}
+.resident-report-grid .report-chart{overflow:hidden}
+.resident-report-grid .report-bars,.report-bars{min-width:0;max-width:100%;width:100%;gap:2px;padding:8px 0 0}
+.report-bar-col{min-width:0;max-width:none;gap:5px}
+.report-bar-value{font-size:9px;white-space:normal;overflow-wrap:anywhere}
+.report-bar-label{font-size:9px;overflow-wrap:anywhere;max-width:100%}
+.report-line{width:100%;min-width:0;height:auto}
+.report-axis-labels{gap:4px}.report-axis-labels span{min-width:0;font-size:9px;overflow-wrap:anywhere}
+.report-donut-layout{min-width:0;max-width:100%}.report-donut{width:min(200px,75vw);height:auto;aspect-ratio:1}.report-donut-center{width:58%;height:auto;aspect-ratio:1;min-width:0}.report-legend{min-width:0;overflow-wrap:anywhere}
+.chart-kind-picker{display:flex;align-items:center;justify-content:space-between;gap:8px;margin:10px 0 18px}.chart-kind-picker label{font-size:12px}.chart-kind-picker select{width:auto;max-width:55%;padding:8px 10px}
+.report-year-selector{display:flex;align-items:center;gap:14px;margin:16px 0}.report-year-selector select{max-width:130px}
+.period-comparison{display:grid;gap:7px;margin:14px 0 4px;padding:12px;border-radius:12px;background:#f5f9fa;font-size:12px;color:#5d7581}.period-comparison span{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}.period-comparison strong{color:#214b5b}
+.resident-nav{overflow-x:hidden;justify-content:space-around}.resident-nav button{min-width:0;flex:1 1 0;max-width:25%}
+@media(max-width:720px){.admin-mobile-more{overflow-x:hidden;flex-wrap:wrap}.admin-mobile-more button{white-space:normal}.table-wrap{max-width:100%;overflow-x:hidden}.report-donut-layout{flex-direction:column}.report-legend{width:100%}.fuel-period-details table{min-width:0;width:100%;font-size:10px}.fuel-period-details th,.fuel-period-details td{padding:8px 4px;overflow-wrap:anywhere}.fuel-period-details .table-wrap{overflow-x:hidden}.resident-report-grid .report-bars{min-width:0}}
