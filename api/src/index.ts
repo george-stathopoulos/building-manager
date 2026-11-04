@@ -135,7 +135,7 @@ export default {
     const apartments=(await env.DB.prepare('SELECT id,code,heating_share_bp FROM apartments ORDER BY code').all<FuelApartment>()).results;
     const readings=(await env.DB.prepare('SELECT apartment_id,measured_on,reading FROM heating_readings ORDER BY measured_on').all<FuelReading>()).results;
     const tank=(await env.DB.prepare('SELECT measured_on,centimeters FROM tank_measurements ORDER BY measured_on').all<FuelTank>()).results;
-    const deliveries=(await env.DB.prepare('SELECT delivered_on,liters FROM fuel_deliveries ORDER BY delivered_on').all<FuelDelivery>()).results;
+    const deliveries=(await env.DB.prepare('SELECT delivered_on,liters,cost_cents FROM fuel_deliveries ORDER BY delivered_on').all<FuelDelivery>()).results;
     const payments=(await env.DB.prepare("SELECT apartment_id,paid_on,amount_cents FROM payments WHERE kind='heating' ORDER BY paid_on").all<FuelPayment>()).results;
     const openings=(await env.DB.prepare('SELECT apartment_id,as_of,deposited_cents,estimated_consumed_cents,note FROM fuel_openings').all<FuelOpening>()).results;
     const settings=await env.DB.prepare('SELECT liters_per_cm,price_cents_per_liter FROM fuel_settings WHERE id=1').first<FuelSettings>();
