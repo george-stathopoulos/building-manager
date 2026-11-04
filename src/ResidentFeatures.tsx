@@ -28,7 +28,7 @@ export function FuelAccountSummary({account,compact=false}:{account:FuelAccountV
    <article><small>Νέες καταθέσεις</small><strong>{account.opening&&account.deposits_cents!==null?money(Math.max(0,account.deposits_cents-account.opening.deposited_cents)):'—'}</strong><span>Πληρωμές μετά τη μεταφορά υπολοίπου</span></article>
    <article><small>Νέο εκτιμώμενο κόστος</small><strong>{money(account.estimated_cost_cents)}</strong><span>Εκτίμηση από κατανάλωση, όχι τιμολόγιο</span></article>
    <article><small>Διαθέσιμο υπόλοιπο θέρμανσης (εκτ.)</small><strong>{account.estimated_balance_cents===null?'—':money(account.estimated_balance_cents)}</strong><span>{account.estimated_balance_cents===null?'Απαιτείται επιβεβαίωση αρχικού υπολοίπου':'Δεν αποτελεί βεβαιωμένη οφειλή'}</span></article>
-   <article><small>Εκτιμώμενες ώρες που απομένουν</small><strong>{account.remaining_hours===null?'—':fmtHours(account.remaining_hours)}</strong><span>Με τη μέση ιστορική τιμή ανά ώρα</span></article>
+   <article><small>Εκτιμώμενες ώρες που απομένουν</small><strong>{account.remaining_hours===null?'—':fmtHours(account.remaining_hours)}</strong><span>Με εκτιμώμενη τιμή ανά ώρα από διαθέσιμες μετρήσεις του διαμερίσματος</span></article>
    <article><small>Νέες ώρες λειτουργίας</small><strong>{fmtHours(account.hours)}</strong><span>Μόνο διαφορές μεταξύ ενδείξεων</span></article>
    <article><small>Νέα εκτιμώμενα λίτρα</small><strong>{account.estimated_liters.toLocaleString('el-GR',{maximumFractionDigits:2})} L</strong><span>Από μεταβολές δεξαμενής, με επιμερισμό ανά ώρες</span></article>
   </div>
