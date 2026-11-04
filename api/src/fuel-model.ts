@@ -10,9 +10,9 @@ export type FuelAccount={
  apartment_code:string;opening:FuelOpening|null;deposits_cents:number|null;
  estimated_cost_cents:number;estimated_balance_cents:number|null;
  hours:number;estimated_liters:number;estimated_hourly_cost_cents:number|null;
- remaining_hours:number|null;periods:FuelPeriod[];warnings:string[];
+ remaining_hours:number|null;periods:FuelPeriod[];historical_periods:FuelPeriod[];historical_hours:number;historical_liters:number;historical_cost_cents:number;historical_arrears_cents:number;warnings:string[];
 };
-type Input={apartments:FuelApartment[];readings:FuelReading[];tank:FuelTank[];deliveries:FuelDelivery[];payments:FuelPayment[];openings:FuelOpening[];settings:FuelSettings};
+type Input={apartments:FuelApartment[];readings:FuelReading[];tank:FuelTank[];deliveries:FuelDelivery[];payments:FuelPayment[];openings:FuelOpening[];settings:FuelSettings;settledThrough:string};
 function distribute(total:number,weights:number[]):number[]{
  const totalWeight=weights.reduce((a,b)=>a+b,0);
  if(totalWeight<=0)return weights.map(()=>0);
@@ -30,7 +30,7 @@ export function calculateFuelAccounts(input:Input):{accounts:FuelAccount[];exclu
   apartment_code:a.code,opening:input.openings.find(o=>o.apartment_id===a.id)||null,
   deposits_cents:null as number|null,estimated_cost_cents:0,estimated_balance_cents:null as number|null,
   hours:0,estimated_liters:0,estimated_hourly_cost_cents:null as number|null,
-  remaining_hours:null as number|null,periods:[] as FuelPeriod[],warnings:[] as string[]
+  remaining_hours:null as number|null,periods:[] as FuelPeriod[],historical_periods:[] as FuelPeriod[],historical_hours:0,historical_liters:0,historical_cost_cents:0,historical_arrears_cents:0,warnings:[] as string[]
  }));
  const excluded:string[]=[];
  let allWeightedHours=0,allFuelCost=0,periodCount=0;
@@ -54,23 +54,36 @@ export function calculateFuelAccounts(input:Input):{accounts:FuelAccount[];exclu
   const weighted=hours.map((v,i)=>v*input.apartments[i].heating_share_bp);
   const portions=distribute(totalLitersCenti,hours);
   const costs=distribute(costCents,weighted);
-  allWeightedHours+=weighted.reduce((a,b)=>a+b,0);
-  allFuelCost+=costCents;
-  periodCount++;
+  const isHistorical=end.measured_on<=input.settledThrough;
+  if(!isHistorical){allWeightedHours+=weighted.reduce((a,b)=>a+b,0);allFuelCost+=costCents;periodCount++;}
   accounts.forEach((account,i)=>{
    const part={start:start.measured_on,end:end.measured_on,hours:hours[i],liters:portions[i]/100,cost_cents:costs[i]};
-   account.periods.push(part);
-   account.hours+=part.hours;
-   account.estimated_liters+=part.liters;
-   if(!account.opening||start.measured_on>=account.opening.as_of)account.estimated_cost_cents+=part.cost_cents;
-   else if(end.measured_on>account.opening.as_of)account.warnings.push('Unallocated interval overlapping opening date: '+start.measured_on+' → '+end.measured_on);
+   if(isHistorical){
+    account.historical_periods.push(part);
+    account.historical_hours+=part.hours;
+    account.historical_liters+=part.liters;
+    account.historical_cost_cents+=part.cost_cents;
+   }else{
+    account.periods.push(part);
+    account.hours+=part.hours;
+    account.estimated_liters+=part.liters;
+    if(start.measured_on<input.settledThrough){
+     account.warnings.push('Interval overlaps settlement baseline: '+start.measured_on+' → '+end.measured_on);
+    }else if(!account.opening||start.measured_on>=account.opening.as_of){
+     account.estimated_cost_cents+=part.cost_cents;
+    }else if(end.measured_on>account.opening.as_of){
+     account.warnings.push('Interval overlaps opening date: '+start.measured_on+' → '+end.measured_on);
+    }
+   }
   });
  }
  accounts.forEach((account,i)=>{
   const apt=input.apartments[i];
   account.hours=Math.round(account.hours*100)/100;
   account.estimated_liters=Math.round(account.estimated_liters*100)/100;
-  if(account.opening){
+  account.historical_hours=Math.round(account.historical_hours*100)/100;
+  account.historical_liters=Math.round(account.historical_liters*100)/100;
+  if(account.opening&&account.opening.as_of>=input.settledThrough){
    const newDeposits=input.payments.filter(p=>p.apartment_id===apt.id&&p.paid_on>account.opening!.as_of).reduce((n,p)=>n+p.amount_cents,0);
    account.deposits_cents=account.opening.deposited_cents+newDeposits;
    account.estimated_cost_cents+=account.opening.estimated_consumed_cents;
