@@ -86,3 +86,9 @@ input:disabled,select:disabled,textarea:disabled{background:#f4f6f8;color:#72839
 .resident-payment-inline{display:flex;align-items:flex-end;flex-direction:column;gap:5px;min-width:0}
 .resident-payment-inline strong{white-space:nowrap}
 @media(max-width:480px){.payment-badge{font-size:11px;padding:4px 7px}.resident-line{align-items:flex-start}.resident-payment-inline{max-width:60%}}
+
+/* Explain provisional electricity charges to residents and on printed statements. */
+.electricity-notice{margin:14px 0;padding:12px 15px;border:1px solid #d6c58b;border-left:4px solid #b5862b;border-radius:9px;background:#fffaf0;color:#56451c;font-size:12px;line-height:1.55;overflow-wrap:anywhere}
+.electricity-notice strong{display:block;font-size:12px}.electricity-notice p{margin:6px 0 0}
+.electricity-tag{display:block;color:#8b631b;font-size:11px;font-weight:700;margin-top:5px}
+@media print{#common-statement .electricity-notice{break-inside:avoid;page-break-inside:avoid;background:#fffaf0!important;-webkit-print-color-adjust:exact;print-color-adjust:exact}}
