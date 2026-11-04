@@ -89,11 +89,16 @@ export function calculateFuelAccounts(input:Input):{accounts:FuelAccount[];exclu
    account.estimated_cost_cents+=account.opening.estimated_consumed_cents;
    account.estimated_balance_cents=Math.max(0,account.deposits_cents-account.estimated_cost_cents);
   }
+  // Prefer observed post-settlement hourly cost when available. Until new
+  // readings exist, use this apartment's historical allocated cost per meter-hour.
+  // Historic settlement remains closed: this benchmark is for forecasts only.
   if(allWeightedHours>0){
    account.estimated_hourly_cost_cents=Math.round(allFuelCost*apt.heating_share_bp/allWeightedHours*100)/100;
-   if(account.estimated_balance_cents!==null&&account.estimated_hourly_cost_cents>0){
-    account.remaining_hours=Math.round(Math.max(0,account.estimated_balance_cents)/account.estimated_hourly_cost_cents*100)/100;
-   }
+  }else if(account.historical_hours>0&&account.historical_cost_cents>0){
+   account.estimated_hourly_cost_cents=Math.round(account.historical_cost_cents/account.historical_hours*100)/100;
+  }
+  if(account.estimated_balance_cents!==null&&account.estimated_hourly_cost_cents!==null&&account.estimated_hourly_cost_cents>0){
+   account.remaining_hours=Math.round(Math.max(0,account.estimated_balance_cents)/account.estimated_hourly_cost_cents*100)/100;
   }
   if(excluded.length)account.warnings.push(excluded.length+' heating periods excluded from estimates');
  });
