@@ -356,3 +356,14 @@ button,a,input,select,textarea,summary,[role="button"]{touch-action:manipulation
 .resident-pdf-button span{font-size:21px;line-height:1}
 
 .payment-reverse-button{display:inline-flex;align-items:center;gap:8px;margin:12px 0;padding:11px 15px;min-height:46px;border:1px solid #c88383;border-radius:12px;background:#fff7f7;color:#972e39;font-weight:750;cursor:pointer}.payment-reverse-button:disabled{opacity:.5;cursor:wait}
+
+/* Mobile-friendly monthly statement preview */
+.resident-pdf-overlay{position:fixed;inset:0;z-index:1000;background:#0c2535b8;display:flex;align-items:center;justify-content:center;padding:16px}
+.resident-pdf-dialog{width:min(760px,100%);max-height:calc(100dvh - 32px);overflow:auto;background:white;color:#1b2e3a;border-radius:16px;padding:16px;box-shadow:0 18px 50px #0003}
+.resident-pdf-toolbar{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;padding:6px 2px 14px}
+.resident-pdf-toolbar button{border:1px solid #accbc7;background:#e8f5f3;color:#086f67;border-radius:9px;padding:10px 14px;font-weight:700}
+.resident-pdf-paper{padding:16px;background:white;color:#111;border:1px solid #dde5ea;border-radius:9px}
+.resident-pdf-paper h1{text-align:center;font-size:22px;margin:0 0 16px}.resident-pdf-paper h3{margin:18px 0 8px;font-size:15px}
+.resident-pdf-paper table{min-width:0;width:100%;table-layout:fixed;font-size:12px}.resident-pdf-paper th,.resident-pdf-paper td{padding:8px 6px;overflow-wrap:anywhere;border:1px solid #cbd5de}.resident-pdf-paper th:last-child,.resident-pdf-paper td:last-child{text-align:right}
+@media(max-width:600px){.resident-pdf-overlay{padding:8px}.resident-pdf-dialog{max-height:calc(100dvh - 16px);padding:10px}.resident-pdf-paper{padding:10px}.resident-pdf-paper h1{font-size:19px}}
+@media print{.resident-pdf-overlay{display:none!important}}
