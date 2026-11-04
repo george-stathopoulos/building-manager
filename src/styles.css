@@ -53,3 +53,5 @@ label>span,label>small{line-height:1.4}
 input[type="checkbox"],input[type="radio"]{width:auto;min-width:auto;accent-color:#188d82}
 input:disabled,select:disabled,textarea:disabled{background:#f4f6f8;color:#728391}
 @media(max-width:720px){input:not([type="checkbox"]):not([type="radio"]),select{min-height:44px;height:44px}}
+
+.auth-mode{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin:22px 0 14px;padding:4px;background:#edf3f4;border-radius:12px}.auth-mode button{background:transparent;color:#42566a;border-radius:9px;padding:12px 10px;font-weight:700}.auth-mode button.selected{background:#fff;color:#137a71;box-shadow:0 1px 6px #1c304018}.auth-mode button:focus-visible{outline:3px solid #29ac9680}
