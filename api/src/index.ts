@@ -518,7 +518,18 @@ export default {
     const payment=await env.DB.prepare('SELECT p.id,a.code AS apartment_code,p.kind,p.amount_cents,p.paid_on,p.source_declaration_id FROM payments p JOIN apartments a ON a.id=p.apartment_id WHERE p.id=?').bind(b.id).first<{id:string;apartment_code:string;kind:string;amount_cents:number;paid_on:string;source_declaration_id:string|null}>();
     if(!payment)return fail(req,env,'Η πληρωμή δεν βρέθηκε.',404);
     if(payment.source_declaration_id)return fail(req,env,'Η πληρωμή προέρχεται από εγκεκριμένη δήλωση. Αναιρέστε πρώτα την έγκριση.',409);
-    await env.DB.batch([env.DB.prepare('DELETE FROM payments WHERE id=?').bind(b.id),audit(env,user.id,'payment_deleted','payment',b.id,{...payment,reason:typeof b.reason==='string'?b.reason.slice(0,300):''})]);
+    try{
+     // Record the deletion first, so even if the payment removal fails the original
+     // payment remains available and the failure is diagnosable.
+     await env.DB.batch([
+      audit(env,user.id,'payment_deleted','payment',b.id,{...payment,reason:typeof b.reason==='string'?b.reason.slice(0,300):''}),
+      env.DB.prepare('DELETE FROM payments WHERE id=? AND source_declaration_id IS NULL').bind(b.id)
+     ]);
+    }catch(error){
+     const detail=error instanceof Error?error.message:String(error);
+     console.error('payment deletion failed',detail);
+     return fail(req,env,'Η διαγραφή απέτυχε: '+detail.slice(0,250),500);
+    }
     return response(req,env,{ok:true});
    }
    if(path==='/api/payments/update'&&method==='POST'){
