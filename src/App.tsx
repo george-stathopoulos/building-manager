@@ -108,7 +108,7 @@ function App(){
  }
 
  const declarationDate=new Date().toISOString().slice(0,10);
- const [ownerView,setOwnerView]=useState<'pending'|'stats'|'history'>('pending');
+ const [ownerView,setOwnerView]=useState<'pending'|'stats'|'history'|'notifications'>('pending');
  const [declarationBusy,setDeclarationBusy]=useState(false);
  async function loadDeclarations(){try{const r=await request<{declarations:PaymentDeclaration[];unread_payment_count:number}>('/payment-declarations');setDeclarations(r.declarations);setUnreadPaymentCount(r.unread_payment_count||0);await loadHeatingRequests();}catch(e){setStatus((e as Error).message);}}
  function openResidentNews(){setResidentNewsSection('menu');setTab('announcements');}
