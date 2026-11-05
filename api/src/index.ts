@@ -61,6 +61,19 @@ export default {
     return response(req,env,{token:await session(env,user.id)});
     } catch(e) { console.error('Login stage:',loginStage,e instanceof Error?e.name:'unknown',e instanceof Error?e.message:'');return fail(req,env,'Σφάλμα σύνδεσης ('+loginStage+').',500); }
    }
+   if(path==='/api/admin/pin/login'&&method==='POST'){
+    const b=await jsonBody(req);if(!validPin(b.pin))return fail(req,env,'Λανθασμένο PIN.',401);
+    const cutoff=new Date(Date.now()-30*60000).toISOString(),key='admin-pin';
+    const attempts=await env.DB.prepare('SELECT attempts,window_start FROM login_attempts WHERE email=?').bind(key).first<{attempts:number;window_start:string}>();
+    if(attempts&&attempts.window_start>cutoff&&attempts.attempts>=5)return fail(req,env,'Πολλές προσπάθειες. Δοκιμάστε ξανά σε 30 λεπτά.',429);
+    const cred=await env.DB.prepare('SELECT p.user_id,p.salt,p.pin_hash,p.must_change FROM admin_pin_credentials p JOIN users u ON u.id=p.user_id WHERE u.role=? LIMIT 1').bind('admin').first<{user_id:string;salt:string;pin_hash:string;must_change:number}>();
+    if(!cred||!same(await hashPassword(b.pin,cred.salt),cred.pin_hash)){
+     await env.DB.prepare('INSERT INTO login_attempts(email,attempts,window_start) VALUES(?,?,?) ON CONFLICT(email) DO UPDATE SET attempts=excluded.attempts,window_start=excluded.window_start').bind(key,attempts&&attempts.window_start>cutoff?attempts.attempts+1:1,attempts&&attempts.window_start>cutoff?attempts.window_start:iso()).run();
+     return fail(req,env,'Λανθασμένο PIN.',401);
+    }
+    await env.DB.prepare('DELETE FROM login_attempts WHERE email=?').bind(key).run();
+    return response(req,env,{token:await session(env,cred.user_id),must_change:Boolean(cred.must_change)});
+   }
    if(path==='/api/pin/login'&&method==='POST'){
     const b=await jsonBody(req);if(typeof b.apartment_code!=='string'||!validPin(b.pin))return fail(req,env,'Λανθασμένο διαμέρισμα ή PIN.',401);
     const apt=await env.DB.prepare('SELECT id,code FROM apartments WHERE code=?').bind(b.apartment_code).first<{id:string;code:string}>();
@@ -92,6 +105,20 @@ export default {
    }
    const user=await userFor(req,env);
    if(!user)return fail(req,env,'Απαιτείται σύνδεση.',401);
+   if(path==='/api/admin/pin/change'&&method==='POST'){
+    if(user.role!=='admin')return fail(req,env,'Δεν επιτρέπεται.',403);
+    const b=await jsonBody(req);
+    if(!validPin(b.pin)||b.pin!==b.confirm_pin||b.pin==='6666')return fail(req,env,'Ορίστε νέο τετραψήφιο PIN διαφορετικό από το αρχικό.',400);
+    const cred=await env.DB.prepare('SELECT salt,pin_hash,must_change FROM admin_pin_credentials WHERE user_id=?').bind(user.id).first<{salt:string;pin_hash:string;must_change:number}>();
+    if(!cred)return fail(req,env,'Το PIN διαχειριστή δεν έχει ενεργοποιηθεί.',403);
+    if(!cred.must_change&&(!validPin(b.current_pin)||!same(await hashPassword(b.current_pin,cred.salt),cred.pin_hash)))return fail(req,env,'Λανθασμένο τρέχον PIN.',403);
+    const salt=randomToken();
+    await env.DB.prepare('UPDATE admin_pin_credentials SET salt=?,pin_hash=?,must_change=0 WHERE user_id=?').bind(salt,await hashPassword(b.pin,salt),user.id).run();
+    await env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(user.id).run();
+    return response(req,env,{token:await session(env,user.id)});
+   }
+   const adminPinStatus=user.role==='admin'?await env.DB.prepare('SELECT must_change FROM admin_pin_credentials WHERE user_id=?').bind(user.id).first<{must_change:number}>():null;
+   if(adminPinStatus?.must_change&&path!=='/api/logout'&&path!=='/api/account')return fail(req,env,'Αλλάξτε πρώτα το αρχικό PIN.',403);
    const myPin=await env.DB.prepare('SELECT c.apartment_id,c.must_change FROM apartment_pin_credentials c WHERE c.user_id=?').bind(user.id).first<{apartment_id:string;must_change:number}>();
    if(path==='/api/account/pin'&&method==='POST'){
     if(!myPin)return fail(req,env,'Ο λογαριασμός δεν χρησιμοποιεί PIN.',403);
