@@ -108,6 +108,10 @@ input:disabled,select:disabled,textarea:disabled{background:#f4f6f8;color:#72839
 
 /* Resident-first home: the three primary destinations are full-size touch targets. */
 .resident-home-hero{padding:14px 3px 18px}.resident-home-hero>span{font-size:11px;letter-spacing:.14em;font-weight:800;color:#168b80}.resident-home-hero h2{font-size:clamp(23px,5vw,30px);line-height:1.2;letter-spacing:-.025em;color:#193e4b;margin:8px 0 10px}.resident-home-hero p{color:#69818e;line-height:1.55;font-size:14px;margin:0;max-width:510px}
+.resident-home-hero{display:grid;grid-template-rows:1fr;opacity:1;transition:grid-template-rows 1.25s ease,opacity 1.25s ease,padding 1.25s ease;overflow:hidden}
+.resident-home-hero-content{min-height:0;overflow:hidden}
+.resident-home-hero--hidden{grid-template-rows:0fr;opacity:0;padding-top:0;padding-bottom:0;pointer-events:none}
+@media(prefers-reduced-motion:reduce){.resident-home-hero{transition:none}}
 .resident-portal-grid{display:grid;grid-template-columns:minmax(0,1fr);gap:13px}
 .resident-portal-card{position:relative;display:flex;flex-direction:column;align-items:flex-start;gap:11px;min-height:168px;width:100%;padding:20px 22px;border-radius:21px;border:1px solid #e0e9ee;background:#fff;color:#173747;text-align:left;box-shadow:0 5px 17px #123c4b0b;cursor:pointer;transition:transform .16s ease,box-shadow .16s ease,border-color .16s ease;overflow:hidden}
 .resident-portal-card:hover,.resident-portal-card:focus-visible{transform:translateY(-2px);border-color:#9fd1ca;box-shadow:0 10px 27px #123c4b17;outline-offset:2px}
