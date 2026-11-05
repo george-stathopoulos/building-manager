@@ -385,3 +385,9 @@ button,a,input,select,textarea,summary,[role="button"]{touch-action:manipulation
 /* A2 and B3 are automatically settled, not actual received payments. */
 .payment-badge--auto{background:#e4f6ed!important;color:#367b61!important;border:1px solid #bce7d0!important}
 .payment-badge--auto .payment-badge-icon{color:#4a9d77!important}
+
+/* Four-digit PIN entry: numeric keyboard on mobile and unmistakable four-slot rhythm. */
+.pin-code-input{max-width:260px!important;letter-spacing:.7em!important;font-size:1.7rem!important;font-weight:750!important;font-variant-numeric:tabular-nums;text-align:center;padding:13px 10px!important;min-height:56px}
+.pin-code-input::placeholder{letter-spacing:.65em;color:#a5b7bf;opacity:1}
+.pin-hint{font-size:.85rem;color:#65828d;font-weight:500;margin-left:.35rem}
+.pin-progress{display:block;font-size:.8rem;color:#69818e;margin-top:.35rem}
