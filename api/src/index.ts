@@ -516,7 +516,7 @@ export default {
     for(const code of codes){
       const i=apartments.findIndex(a=>a.code===code),a=apartments[i];
       const before=await env.DB.prepare('SELECT paid_cents,paid_on FROM statement_payments WHERE month=? AND apartment_id=?').bind(b.month,a.id).first();
-      const paidCents=b.paid?netCommonDue(code,due[i]):0;
+      const paidCents=b.paid?netCommonDue(a.code,due[i]):0;
       writes.push(env.DB.prepare('INSERT INTO statement_payments(month,apartment_id,paid_cents,paid_on,updated_by,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(month,apartment_id) DO UPDATE SET paid_cents=excluded.paid_cents,paid_on=excluded.paid_on,updated_by=excluded.updated_by,updated_at=excluded.updated_at').bind(b.month,a.id,paidCents,b.paid?day:null,user.id,timestamp));
       writes.push(audit(env,user.id,'statement_payment_updated','statement_payment',b.month+':'+a.code,{before,after:{paid_cents:paidCents,paid_on:b.paid?day:null},month:b.month,apartment_code:a.code,bulk:true}));
     }
