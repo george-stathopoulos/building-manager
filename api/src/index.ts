@@ -245,14 +245,16 @@ export default {
     const apartmentId=own?.[0]||null;
     const all=(await env.DB.prepare('SELECT id,title,body,published_at,created_at,archived_at FROM announcements ORDER BY published_at DESC LIMIT 100').all<{id:string;title:string;body:string;published_at:string;created_at:string;archived_at:string|null}>()).results;
     const reads=apartmentId?(await env.DB.prepare('SELECT announcement_id FROM announcement_reads WHERE apartment_id=?').bind(apartmentId).all<{announcement_id:string}>()).results.map(x=>x.announcement_id):[];
-    const announcements=all.filter(a=>user.role==='admin'||!a.archived_at).map(a=>({...a,read:user.role==='admin'||reads.includes(a.id)}));
+    const recipientRows=apartmentId?(await env.DB.prepare('SELECT announcement_id FROM announcement_recipients WHERE apartment_id=?').bind(apartmentId).all<{announcement_id:string}>()).results.map(x=>x.announcement_id):[];
+    const targetedIds=(await env.DB.prepare('SELECT DISTINCT announcement_id FROM announcement_recipients').all<{announcement_id:string}>()).results.map(x=>x.announcement_id);
+    const announcements=all.filter(a=>user.role==='admin'||(!a.archived_at&&(!targetedIds.includes(a.id)||recipientRows.includes(a.id)))).map(a=>({...a,read:user.role==='admin'||reads.includes(a.id)}));
     return response(req,env,{announcements,unread_count:announcements.filter(a=>!a.read).length});
    }
    if(path==='/api/announcements/read'&&method==='POST'){
     if(user.role==='admin')return response(req,env,{ok:true});
     const b=await jsonBody(req);
     if(typeof b.id!=='string'||b.id.length>100)return fail(req,env,'Μη έγκυρη ανακοίνωση.');
-    const announcement=await env.DB.prepare('SELECT id FROM announcements WHERE id=? AND archived_at IS NULL').bind(b.id).first();
+    const announcement=await env.DB.prepare('SELECT id FROM announcements WHERE id=? AND archived_at IS NULL AND (NOT EXISTS(SELECT 1 FROM announcement_recipients WHERE announcement_id=announcements.id) OR EXISTS(SELECT 1 FROM announcement_recipients WHERE announcement_id=announcements.id AND apartment_id IN (SELECT apartment_id FROM memberships WHERE user_id=?)))').bind(b.id,user.id).first();
     if(!announcement)return fail(req,env,'Η ανακοίνωση δεν βρέθηκε.',404);
     const own=await myApartmentIds(env,user);
     if(!own?.length)return fail(req,env,'Δεν βρέθηκε διαμέρισμα.',403);
@@ -608,12 +610,17 @@ export default {
     const b=await jsonBody(req);
     if(typeof b.title!=='string'||typeof b.body!=='string'||!b.title.trim()||!b.body.trim()||b.title.trim().length>120||b.body.trim().length>5000)
      return fail(req,env,'Συμπληρώστε τίτλο και κείμενο ανακοίνωσης (έως 120 και 5.000 χαρακτήρες).');
+    const selected=b.apartment_codes;
+    if(selected!==undefined&&(!Array.isArray(selected)||selected.length<1||selected.length>6||selected.some((code:unknown)=>typeof code!=='string'||!['A1','A2','A3','B1','B2','B3'].includes(code))||new Set(selected).size!==selected.length))return fail(req,env,'Επιλέξτε έγκυρα διαμερίσματα.',400);
+    const targets=selected?(await env.DB.prepare('SELECT id,code FROM apartments WHERE code IN ('+selected.map(()=>'?').join(',')+')').bind(...selected).all<{id:string;code:string}>()).results:[];
+    if(selected&&targets.length!==selected.length)return fail(req,env,'Δεν βρέθηκαν όλα τα διαμερίσματα.',400);
     const id=uuid(),timestamp=iso();
     await env.DB.batch([
      env.DB.prepare('INSERT INTO announcements(id,title,body,published_at,created_by,created_at) VALUES(?,?,?,?,?,?)').bind(id,b.title.trim(),b.body.trim(),timestamp,user.id,timestamp),
-     audit(env,user.id,'announcement_published','announcement',id,{title:b.title.trim()})
+     ...targets.map(a=>env.DB.prepare('INSERT INTO announcement_recipients(announcement_id,apartment_id) VALUES(?,?)').bind(id,a.id)),
+     audit(env,user.id,'announcement_published','announcement',id,{title:b.title.trim(),apartment_codes:selected||'all'})
     ]);
-    ctx.waitUntil(notifyAll(env));
+    if(selected){for(const a of targets)ctx.waitUntil(notifyApartment(env,a.id));}else ctx.waitUntil(notifyAll(env));
     return response(req,env,{ok:true,id},201);
    }
    if(path==='/api/announcements/delete'&&method==='POST'){
