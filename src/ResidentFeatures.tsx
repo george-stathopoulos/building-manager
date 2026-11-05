@@ -20,8 +20,9 @@ export type AnnouncementsResponse={announcements:AnnouncementView[];unread_count
 const dateGreek=(date:string)=>new Date(date+'T12:00:00').toLocaleDateString('el-GR');
 const fmtHours=(hours:number)=>hours.toLocaleString('el-GR',{maximumFractionDigits:2})+' ώρες';
 
-export function FuelAccountSummary({account,compact=false}:{account:FuelAccountView|null|undefined;compact?:boolean}){
+export function FuelAccountSummary({account,compact=false,priceCentsPerLiter}:{account:FuelAccountView|null|undefined;compact?:boolean;priceCentsPerLiter?:number}){
  if(!account)return <p className="muted">Δεν υπάρχουν ακόμη στοιχεία κατανάλωσης θέρμανσης.</p>;
+ const creditLiters=account.estimated_balance_cents!==null&&priceCentsPerLiter!==undefined&&Number.isFinite(priceCentsPerLiter)&&priceCentsPerLiter>0?account.estimated_balance_cents/priceCentsPerLiter:null;
  return <div className="fuel-account-summary"><p className="fuel-settled-banner">Ιστορική περίοδος: κλειστή · Δεν μεταφέρονται παλαιές οφειλές</p>
   <div className="fuel-metrics">
    <article><small>Μεταφερόμενη πίστωση θέρμανσης</small><strong>{account.opening?money(Math.max(0,account.opening.deposited_cents-account.opening.estimated_consumed_cents)):'—'}</strong><span>{account.opening?'Πίστωση από το ιστορικό αρχείο, προς συμφωνία με τα πραγματικά παραστατικά':'Δεν έχει επιβεβαιωθεί αρχική πίστωση'}</span></article>
@@ -29,8 +30,9 @@ export function FuelAccountSummary({account,compact=false}:{account:FuelAccountV
    <article><small>Εκτιμώμενη νέα κατανάλωση (€)</small><strong>{money(account.estimated_cost_cents)}</strong><span>Εκτίμηση από κατανάλωση, όχι τιμολόγιο</span></article>
    <article><small>Υπόλοιπο πίστωσης θέρμανσης</small><strong>{account.estimated_balance_cents===null?'—':money(account.estimated_balance_cents)}</strong><span>{account.estimated_balance_cents===null?'Απαιτείται επιβεβαίωση αρχικού υπολοίπου':'Μεταφερόμενη πίστωση + νέες πληρωμές − εκτιμώμενη νέα κατανάλωση'}</span></article>
    <article><small>Εκτιμώμενες ώρες που απομένουν</small><strong>{account.remaining_hours===null?'—':fmtHours(account.remaining_hours)}</strong><span>Με εκτιμώμενη τιμή ανά ώρα από διαθέσιμες μετρήσεις του διαμερίσματος</span></article>
+   <article><small>Εκτιμώμενα λίτρα που καλύπτει η πίστωση</small><strong>{creditLiters===null?'—':creditLiters.toLocaleString('el-GR',{maximumFractionDigits:2})+' L'}</strong><span>{creditLiters===null?'Δεν υπάρχει διαθέσιμη αξιόπιστη τιμή €/L ή επιβεβαιωμένη πίστωση':'Υπόλοιπο πίστωσης ÷ ενδεικτική τιμή '+(priceCentsPerLiter!/100).toLocaleString('el-GR',{maximumFractionDigits:2})+' €/L. Οικονομική ισοδυναμία, όχι μετρημένο απόθεμα ή ατομική ποσότητα δεξαμενής.'}</span></article>
    <article><small>Νέες ώρες λειτουργίας</small><strong>{fmtHours(account.hours)}</strong><span>Μόνο διαφορές μεταξύ ενδείξεων</span></article>
-   <article><small>Νέα εκτιμώμενα λίτρα</small><strong>{account.estimated_liters.toLocaleString('el-GR',{maximumFractionDigits:2})} L</strong><span>Από μεταβολές δεξαμενής, με επιμερισμό ανά ώρες</span></article>
+   <article><small>Νέα εκτιμώμενα λίτρα</small><strong>{account.estimated_liters.toLocaleString('el-GR',{maximumFractionDigits:2})} L</strong><span>Λίτρα που καταναλώθηκαν στη νέα περίοδο, όχι λίτρα που απομένουν από την πίστωση</span></article>
   </div>
   {!account.opening&&<p className="fuel-amber">Το ιστορικό πετρέλαιο έχει εξοφληθεί. Τυχόν αχρησιμοποίητη πίστωση χρειάζεται ξεχωριστή συμφωνία. Οι εκτιμήσεις κατανάλωσης εμφανίζονται, όχι όμως υποθετική πίστωση ή οφειλή.</p>}
   {!compact&&<details className="fuel-period-details"><summary>Εξοφλημένη ιστορική κατανάλωση ({account.historical_periods.length} περίοδοι)</summary><p className="muted">Ιστορική εκτίμηση: {account.historical_hours.toLocaleString('el-GR')} ώρες · {account.historical_liters.toLocaleString('el-GR')} λίτρα · {money(account.historical_cost_cents)}. Καμία εκκρεμής οφειλή.</p></details>}
