@@ -30,6 +30,9 @@ async function session(env:Env,userId:string){const token=randomToken();await en
 function audit(env:Env,actor:string,action:string,type:string,id:string,details:object={}){return env.DB.prepare('INSERT INTO audit_events(id,actor_id,action,entity_type,entity_id,details,created_at) VALUES(?,?,?,?,?,?,?)').bind(uuid(),actor,action,type,id,JSON.stringify(details),iso());}
 async function myApartmentIds(env:Env,user:DbUser){if(user.role==='admin')return null;const r=await env.DB.prepare('SELECT apartment_id FROM memberships WHERE user_id=?').bind(user.id).all<{apartment_id:string}>();return r.results.map(x=>x.apartment_id);}
 function allocate(total:number,apartments:Apartment[],method:string){const weights=apartments.map(a=>method==='shares'?a.common_weight:1);const weightSum=weights.reduce((a,b)=>a+b,0);const exact=weights.map(w=>total*w/weightSum);const amounts=exact.map(Math.floor);const left=total-amounts.reduce((a,b)=>a+b,0);const order=exact.map((n,i)=>({i,part:n-Math.floor(n)})).sort((a,b)=>b.part-a.part||a.i-b.i);for(let i=0;i<left;i++)amounts[order[i].i]++;return amounts;}
+const A3_APP_CREDIT_CENTS=1000;
+function commonCredit(code:string,gross:number){return code==='A3'?Math.min(A3_APP_CREDIT_CENTS,gross):0;}
+function netCommonDue(code:string,gross:number){return gross-commonCredit(code,gross);}
 export default {
  async fetch(req:Request,env:Env,ctx:ExecutionContext):Promise<Response>{
   try{
@@ -271,7 +274,7 @@ export default {
     const items=JSON.parse(statement.items_json) as Array<{name:string;amount_cents:number}>;
     const total=items.reduce((n,x)=>n+x.amount_cents,0);
     const allocations=allocate(total,apartments,statement.method);
-    const selected=apartments.filter(a=>!own||own.includes(a.id)).map(a=>({apartment_code:a.code,due_cents:allocations[apartments.findIndex(x=>x.id===a.id)]}));
+    const selected=apartments.filter(a=>!own||own.includes(a.id)).map(a=>({apartment_code:a.code,due_cents:netCommonDue(a.code,allocations[apartments.findIndex(x=>x.id===a.id)]),gross_due_cents:allocations[apartments.findIndex(x=>x.id===a.id)],credit_cents:commonCredit(a.code,allocations[apartments.findIndex(x=>x.id===a.id)])}));
     return response(req,env,{month:statement.month,address:statement.address,items,total_cents:total,apartments:selected});
    }
    if(path==='/api/statements/summary'&&method==='GET'){
@@ -284,8 +287,8 @@ export default {
       const allocations=allocate(items.reduce((n,x)=>n+x.amount_cents,0),apartments,st.method);
       const rows=apartments.filter(a=>!own||own.includes(a.id)).map(a=>{
         const i=apartments.findIndex(x=>x.id===a.id),p=payments.find(p=>p.month===st.month&&p.apartment_id===a.id);
-        const due=allocations[i],paid=['A2','B3'].includes(a.code)?due:Math.min(p?.paid_cents||0,due);
-        return {apartment_code:a.code,due_cents:due,paid_cents:paid,balance_cents:due-paid,paid_on:p?.paid_on||null,paid:paid>=due};
+        const due=netCommonDue(a.code,allocations[i]),paid=['A2','B3'].includes(a.code)?due:Math.min(p?.paid_cents||0,due);
+        return {apartment_code:a.code,due_cents:due,gross_due_cents:allocations[i],credit_cents:commonCredit(a.code,allocations[i]),paid_cents:paid,balance_cents:due-paid,paid_on:p?.paid_on||null,paid:paid>=due};
       });
       const collectionRows=rows.filter(x=>!['A2','B3'].includes(x.apartment_code));
       return {month:st.month,apartments:rows,due_cents:collectionRows.reduce((n,x)=>n+x.due_cents,0),paid_cents:collectionRows.reduce((n,x)=>n+x.paid_cents,0),balance_cents:collectionRows.reduce((n,x)=>n+x.balance_cents,0),paid_count:collectionRows.filter(x=>x.paid).length,apartment_count:collectionRows.length};
@@ -303,7 +306,7 @@ export default {
     const total=items.reduce((sum,item)=>sum+item.amount_cents,0);
     const due=allocate(total,apartments,statement.method);
     const paid=(await env.DB.prepare('SELECT apartment_id,paid_cents,paid_on FROM statement_payments WHERE month=?').bind(month).all<{apartment_id:string;paid_cents:number;paid_on:string|null}>()).results;
-    return response(req,env,{month,apartments:apartments.filter(a=>!own||own.includes(a.id)).map(a=>{const i=apartments.findIndex(x=>x.id===a.id);const payment=paid.find(x=>x.apartment_id===a.id);const paidCents=['A2','B3'].includes(a.code)?due[i]:(payment?.paid_cents||0);return {apartment_code:a.code,due_cents:due[i],paid_cents:paidCents,balance_cents:Math.max(0,due[i]-paidCents),paid_on:payment?.paid_on||null,status:paidCents>=due[i]?'paid':paidCents>0?'partial':'unpaid'};})});
+    return response(req,env,{month,apartments:apartments.filter(a=>!own||own.includes(a.id)).map(a=>{const i=apartments.findIndex(x=>x.id===a.id);const payment=paid.find(x=>x.apartment_id===a.id);const netDue=netCommonDue(a.code,due[i]);const paidCents=['A2','B3'].includes(a.code)?netDue:Math.min(payment?.paid_cents||0,netDue);return {apartment_code:a.code,due_cents:netDue,gross_due_cents:due[i],credit_cents:commonCredit(a.code,due[i]),paid_cents:paidCents,balance_cents:Math.max(0,netDue-paidCents),paid_on:payment?.paid_on||null,status:paidCents>=netDue?'paid':paidCents>0?'partial':'unpaid'};})});
    }
    if(path==='/api/statements/revisions'&&method==='GET'){
     if(user.role!=='admin')return fail(req,env,'Δεν επιτρέπεται.',403);
