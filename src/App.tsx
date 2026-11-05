@@ -49,8 +49,9 @@ function App(){
  const [tab,setTab]=useState<Tab>('home');
  const [residentNewsSection,setResidentNewsSection]=useState<'menu'|'notifications'|'news'>('menu');
  const [homeIntroVisible,setHomeIntroVisible]=useState(true);
- useEffect(()=>{if(tab!=='home'||!data||data.role==='admin')return;setHomeIntroVisible(true);const timer=window.setTimeout(()=>setHomeIntroVisible(false),3000);return()=>window.clearTimeout(timer);},[tab,data?.role]);
+
  const [data,setData]=useState<Overview|null>(configured?null:demo);
+ useEffect(()=>{if(tab!=='home'||!data||data.role==='admin')return;setHomeIntroVisible(true);const timer=window.setTimeout(()=>setHomeIntroVisible(false),3000);return()=>window.clearTimeout(timer);},[tab,data?.role]);
  const [restoringSession,setRestoringSession]=useState(configured&&authenticated());
  const [status,setStatus]=useState('');
  const [undoPending,setUndoPending]=useState<{label:string;seconds:number}|null>(null);
