@@ -204,7 +204,8 @@ export default {
         const due=allocations[i],paid=['A2','B3'].includes(a.code)?due:Math.min(p?.paid_cents||0,due);
         return {apartment_code:a.code,due_cents:due,paid_cents:paid,balance_cents:due-paid,paid_on:p?.paid_on||null,paid:paid>=due};
       });
-      return {month:st.month,apartments:rows,due_cents:rows.reduce((n,x)=>n+x.due_cents,0),paid_cents:rows.reduce((n,x)=>n+x.paid_cents,0),balance_cents:rows.reduce((n,x)=>n+x.balance_cents,0),paid_count:rows.filter(x=>x.paid).length,apartment_count:rows.length};
+      const collectionRows=rows.filter(x=>!['A2','B3'].includes(x.apartment_code));
+      return {month:st.month,apartments:rows,due_cents:collectionRows.reduce((n,x)=>n+x.due_cents,0),paid_cents:collectionRows.reduce((n,x)=>n+x.paid_cents,0),balance_cents:collectionRows.reduce((n,x)=>n+x.balance_cents,0),paid_count:collectionRows.filter(x=>x.paid).length,apartment_count:collectionRows.length};
     });
     return response(req,env,{months});
    }
