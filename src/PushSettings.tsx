@@ -14,15 +14,27 @@ export function PushSettings({onContinue,firstSetup=false}:{onContinue?:()=>void
   const config=await request<{enabled:boolean;public_key:string|null}>('/push/config');
   if(!active)return;
   setConfigured(config.enabled);setPublicKey(config.public_key||'');
-  if(supported){const reg=await navigator.serviceWorker.getRegistration('/building-manager/');if(active&&reg)setSubscribed(Boolean(await reg.pushManager.getSubscription()));}
- }catch(e){if(active)setMessage((e as Error).message);}finally{if(active)setReady(true);}})();return()=>{active=false;};},[supported]);
+  if(supported){
+   const reg=await navigator.serviceWorker.getRegistration('/building-manager/');
+   const sub=await reg?.pushManager.getSubscription();
+   const permissionNow=Notification.permission;
+   if(!active)return;
+   setPermission(permissionNow);
+   if(sub&&permissionNow==='granted'&&config.enabled){
+    // A browser subscription survives logout; reconnect its endpoint to the current account.
+    await request('/push/subscribe',{method:'POST',body:JSON.stringify({subscription:sub.toJSON()})});
+    if(active)setSubscribed(true);
+   }else if(active)setSubscribed(false);
+  }
+ }catch(e){if(active){setSubscribed(false);setMessage('Δεν ήταν δυνατός ο συγχρονισμός των ειδοποιήσεων: '+(e as Error).message);}}finally{if(active)setReady(true);}})();return()=>{active=false;};},[supported]);
  async function enable(){setBusy(true);setMessage('');try{
   if(!supported)throw Error('Η συσκευή ή το πρόγραμμα περιήγησης δεν υποστηρίζει ειδοποιήσεις push.');
   if(!configured||!publicKey)throw Error('Η υπηρεσία ειδοποιήσεων δεν έχει ενεργοποιηθεί ακόμη.');
   const permissionResult=await Notification.requestPermission();setPermission(permissionResult);
   if(permissionResult!=='granted')throw Error('Δεν δόθηκε άδεια ειδοποιήσεων. Μπορείτε να συνεχίσετε χωρίς αυτές.');
   const reg=await navigator.serviceWorker.register('/building-manager/sw.js');
-  const subscription=await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:decodeKey(publicKey)});
+  const existing=await reg.pushManager.getSubscription();
+  const subscription=existing||await reg.pushManager.subscribe({userVisibleOnly:true,applicationServerKey:decodeKey(publicKey)});
   await request('/push/subscribe',{method:'POST',body:JSON.stringify({subscription:subscription.toJSON()})});
   setSubscribed(true);setMessage('Οι ειδοποιήσεις ενεργοποιήθηκαν σε αυτή τη συσκευή.');
  }catch(e){setMessage((e as Error).message);}finally{setBusy(false);}}
