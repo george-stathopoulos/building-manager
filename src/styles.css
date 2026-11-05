@@ -462,3 +462,11 @@ button,a,input,select,textarea,summary,[role="button"]{touch-action:manipulation
  .mobile-appbrand{min-width:0}
 }
 @media(min-width:901px){.mobile-admin-logout{display:none}}
+
+/* Fix mobile admin drawer stacking: later desktop .sidebar z-index was covering the drawer with its scrim. */
+@media(max-width:900px){
+ .shell .sidebar{z-index:110;position:fixed;top:0;bottom:0;left:0;height:100dvh;padding-top:calc(25px + env(safe-area-inset-top,0px));transform:translateX(-105%);visibility:hidden;pointer-events:none;transition:transform .23s ease,visibility .23s ease}
+ .shell .sidebar.sidebar--open{transform:translateX(0);visibility:visible;pointer-events:auto}
+ .shell .menu-scrim{z-index:109}
+ .shell .sidebar-close{min-width:44px;min-height:44px}
+}
