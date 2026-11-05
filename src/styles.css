@@ -396,3 +396,44 @@ button,a,input,select,textarea,summary,[role="button"]{touch-action:manipulation
 .resident-section-nav-button{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:44px;padding:11px 17px;margin:0 0 18px;border:1px solid #b9dcd8;border-radius:12px;background:#e9f7f4;color:#176f67;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 2px 6px #123b3810}
 .resident-section-nav-button:hover,.resident-section-nav-button:focus-visible{background:#d8f0eb;border-color:#75bdb3}
 .resident-section-nav-button svg{width:18px;height:18px;flex:none}
+
+/* Contrast and readability refresh, shared by resident and owner portals. */
+.resident-shell{background:#edf3f6;color:#142d3c;font-size:15px}
+.resident-header{background:#102f40}
+.resident-header h1{font-size:25px;font-weight:850;letter-spacing:-.025em}
+.resident-header small{font-size:12px;font-weight:750;color:#d1e9ec}
+.resident-logout{font-size:13px;font-weight:750;border-color:#a8c4cf;background:#ffffff22}
+.resident-main{line-height:1.55}
+.resident-card,.resident-metrics article{border-color:#cbdce4;box-shadow:0 3px 13px #142e3b0b}
+.resident-card h2{font-size:21px;font-weight:850;color:#102e40}
+.resident-card h3{font-size:17px;font-weight:800;color:#153447}
+.resident-card p,.resident-card label,.resident-card li,.resident-line{font-size:14px}
+.resident-card .muted,.resident-main .muted{color:#455f6e}
+.resident-line{font-weight:550}
+.resident-line strong{font-weight:800;color:#18384a}
+.resident-portal-card{border:1.5px solid #c5d7e1;box-shadow:0 5px 17px #102d3c14}
+.resident-portal-name{font-size:21px;font-weight:850;color:#102d3c}
+.resident-portal-description{font-size:14px;font-weight:550;color:#3c5969}
+.resident-portal-meta{font-size:12.5px;font-weight:800;color:#086b62}
+.resident-portal-icon{font-size:31px;font-weight:850}
+.resident-portal-common .resident-portal-icon{background:#d6f1e9;color:#075e53}
+.resident-portal-heating .resident-portal-icon{background:#ffebd2;color:#99520c}
+.resident-portal-announcements .resident-portal-icon{background:#e7e2ff;color:#5140a5}
+.resident-portal-card:focus-visible,.resident-nav button:focus-visible{outline:3px solid #267dbe;outline-offset:2px}
+.resident-nav{background:#f8fbfd;border-top:2px solid #b9cdd7;padding:9px 9px calc(10px + env(safe-area-inset-bottom));box-shadow:0 -6px 25px #0b293b20;gap:5px}
+.resident-nav button{min-height:60px;max-width:132px;gap:4px;border:1.5px solid #d4e1e8;border-radius:13px;background:#fff;color:#294e64;padding:8px 4px;transition:background .15s,border-color .15s,transform .15s}
+.resident-nav button span{display:grid;place-items:center;min-height:26px}
+.resident-nav button svg{width:25px;height:25px;stroke-width:2.7}
+.resident-nav button small{font-size:11px;font-weight:800;white-space:normal;line-height:1.15;text-align:center}
+.resident-nav button:nth-child(5n + 1){color:#126d5c}
+.resident-nav button:nth-child(5n + 2){color:#225da0}
+.resident-nav button:nth-child(5n + 3){color:#a45712}
+.resident-nav button:nth-child(5n + 4){color:#6749ad}
+.resident-nav button:nth-child(5n + 5){color:#9a3768}
+.resident-nav button.active{background:#e1f2f0;border-color:#168c80;box-shadow:inset 0 0 0 1px #168c80,0 2px 8px #143b4b17;font-weight:850}
+.resident-nav button:nth-child(5n + 2).active{background:#e5f0ff;border-color:#3978bc;box-shadow:inset 0 0 0 1px #3978bc}
+.resident-nav button:nth-child(5n + 3).active{background:#fff0dc;border-color:#c47a28;box-shadow:inset 0 0 0 1px #c47a28}
+.resident-nav button:nth-child(5n + 4).active{background:#eee9ff;border-color:#8265c3;box-shadow:inset 0 0 0 1px #8265c3}
+.resident-nav button:nth-child(5n + 5).active{background:#fce9f1;border-color:#ba5b86;box-shadow:inset 0 0 0 1px #ba5b86}
+.resident-nav-unread{background:#b62b4d;color:white;border:2px solid white;font-weight:850}
+@media(max-width:370px){.resident-nav{gap:3px;padding-left:4px;padding-right:4px}.resident-nav button{padding:7px 2px;min-height:58px}.resident-nav button small{font-size:10px}}
