@@ -49,10 +49,20 @@ function App(){
  const [tab,setTab]=useState<Tab>('home');
  const [residentNewsSection,setResidentNewsSection]=useState<'menu'|'notifications'|'news'|'contact'>('menu');
  const [ownerView,setOwnerView]=useState<'pending'|'reviews'|'expenses'|'notifications'>('pending');
- const [homeIntroVisible,setHomeIntroVisible]=useState(true);
+ const [homeIntroVisible,setHomeIntroVisible]=useState(false);
+ const homeIntroStarted=useRef(false);
 
  const [data,setData]=useState<Overview|null>(configured?null:demo);
- useEffect(()=>{if(!data||data.role==='admin'||(data.role==='owner'?ownerView!=='pending':tab!=='home'))return;setHomeIntroVisible(true);const timer=window.setTimeout(()=>setHomeIntroVisible(false),3000);return()=>window.clearTimeout(timer);},[tab,ownerView,data?.role]);
+ useEffect(()=>{
+  if(!data||data.role==='admin'||homeIntroStarted.current)return;
+  homeIntroStarted.current=true;
+  // Show once per app session, not every time the resident revisits Home.
+  const key='building-manager:resident-home-intro-shown';
+  try{if(window.sessionStorage.getItem(key)==='1')return;window.sessionStorage.setItem(key,'1');}catch{}
+  setHomeIntroVisible(true);
+  const timer=window.setTimeout(()=>setHomeIntroVisible(false),6000);
+  return()=>window.clearTimeout(timer);
+ },[data?.role]);
  const [restoringSession,setRestoringSession]=useState(configured&&authenticated());
  const [status,setStatus]=useState('');
  const [undoPending,setUndoPending]=useState<{label:string;seconds:number}|null>(null);
