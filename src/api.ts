@@ -5,11 +5,13 @@ export type HeatingReading = {id:string;apartment_code:string;reading:number;mea
 export type FuelDelivery = {id:string;delivered_on:string;liters:number;cost_cents:number;note:string};
 export type Overview = {fuel_deliveries:FuelDelivery[];apartments:Apartment[];expenses:Expense[];payments:Payment[];readings:HeatingReading[];tank:{measured_on:string;centimeters:number}|null;tank_history:{id:string;measured_on:string;centimeters:number}[];role:'admin'|'resident'|'owner';email:string;my_apartments:string[]};
 const origin=(import.meta.env.VITE_API_URL as string|undefined)?.replace(/\/$/,'') || 'https://building-manager-api.george-stathopoulos.workers.dev';
-let token=sessionStorage.getItem('building_manager_token')||'';
+const TOKEN_KEY='building_manager_token';
+let token=localStorage.getItem(TOKEN_KEY)||sessionStorage.getItem(TOKEN_KEY)||'';
+if(token){localStorage.setItem(TOKEN_KEY,token);sessionStorage.removeItem(TOKEN_KEY);}
 export const configured=Boolean(origin);
 export function authenticated(){return Boolean(token);}
-export function saveToken(t:string){token=t;sessionStorage.setItem('building_manager_token',t);}
-export function clearToken(){token='';sessionStorage.removeItem('building_manager_token');}
+export function saveToken(t:string){token=t;localStorage.setItem(TOKEN_KEY,t);sessionStorage.removeItem(TOKEN_KEY);}
+export function clearToken(){token='';localStorage.removeItem(TOKEN_KEY);sessionStorage.removeItem(TOKEN_KEY);}
 export async function request<T>(path:string, options:RequestInit={}):Promise<T>{
  if(!configured)throw Error('Η υπηρεσία δεδομένων δεν έχει συνδεθεί.');
  const res=await fetch(origin+'/api'+path,{...options,headers:{...(options.body?{'Content-Type':'application/json'}:{}),...(token?{'Authorization':'Bearer '+token}:{}),...options.headers},cache:'no-store'});
