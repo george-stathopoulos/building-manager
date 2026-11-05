@@ -463,6 +463,41 @@ export default {
     await env.DB.batch(writes);
     return response(req,env,{ok:true});
    }
+   if(path==='/api/owner/unpaid-expenses'&&method==='GET'){
+    if(!canReview)return fail(req,env,'Δεν επιτρέπεται.',403);
+    const apartments=(await env.DB.prepare('SELECT id,code,common_weight,heating_share_bp FROM apartments ORDER BY code').all<Apartment>()).results;
+    const statements=(await env.DB.prepare('SELECT month,method,items_json FROM monthly_statements ORDER BY month DESC').all<{month:string;method:string;items_json:string}>()).results;
+    const payments=(await env.DB.prepare('SELECT month,apartment_id,paid_cents FROM statement_payments').all<{month:string;apartment_id:string;paid_cents:number}>()).results;
+    const unpaid=statements.flatMap(st=>{
+     const items=JSON.parse(st.items_json) as Array<{amount_cents:number}>;
+     const amounts=allocate(items.reduce((n,x)=>n+x.amount_cents,0),apartments,st.method);
+     return apartments.filter(a=>!['A2','B3'].includes(a.code)).map(a=>{
+      const i=apartments.findIndex(x=>x.id===a.id),due=netCommonDue(a.code,amounts[i]);
+      const paid=Math.min(due,payments.find(p=>p.month===st.month&&p.apartment_id===a.id)?.paid_cents||0);
+      return {month:st.month,apartment_code:a.code,due_cents:due,paid_cents:paid,balance_cents:Math.max(0,due-paid)};
+     }).filter(x=>x.balance_cents>0);
+    });
+    return response(req,env,{unpaid});
+   }
+   if(path==='/api/owner/confirm-expense'&&method==='POST'){
+    if(!canReview)return fail(req,env,'Δεν επιτρέπεται.',403);
+    const b=await jsonBody(req);
+    if(!validMonth(b.month)||typeof b.apartment_code!=='string'||!['A1','A3','B1','B2'].includes(b.apartment_code))return fail(req,env,'Μη έγκυρα στοιχεία.',400);
+    const apartment=await env.DB.prepare('SELECT id,code FROM apartments WHERE code=?').bind(b.apartment_code).first<{id:string;code:string}>();
+    const st=await env.DB.prepare('SELECT method,items_json FROM monthly_statements WHERE month=?').bind(b.month).first<{method:string;items_json:string}>();
+    if(!apartment||!st)return fail(req,env,'Η χρέωση δεν βρέθηκε.',404);
+    const apartments=(await env.DB.prepare('SELECT id,code,common_weight,heating_share_bp FROM apartments ORDER BY code').all<Apartment>()).results;
+    const gross=allocate((JSON.parse(st.items_json) as Array<{amount_cents:number}>).reduce((n,x)=>n+x.amount_cents,0),apartments,st.method)[apartments.findIndex(a=>a.id===apartment.id)];
+    const due=netCommonDue(apartment.code,gross);
+    const existing=await env.DB.prepare('SELECT paid_cents FROM statement_payments WHERE month=? AND apartment_id=?').bind(b.month,apartment.id).first<{paid_cents:number}>();
+    if(due<=0||(existing?.paid_cents||0)>=due)return fail(req,env,'Η χρέωση έχει ήδη εξοφληθεί.',409);
+    const now=iso();
+    await env.DB.batch([
+     env.DB.prepare('INSERT INTO statement_payments(month,apartment_id,paid_cents,paid_on,updated_by,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(month,apartment_id) DO UPDATE SET paid_cents=excluded.paid_cents,paid_on=excluded.paid_on,updated_by=excluded.updated_by,updated_at=excluded.updated_at WHERE statement_payments.paid_cents < excluded.paid_cents').bind(b.month,apartment.id,due,now.slice(0,10),user.id,now),
+     audit(env,user.id,'owner_payment_received','statement_payment',b.month+':'+apartment.code,{month:b.month,apartment_code:apartment.code,amount_cents:due-(existing?.paid_cents||0)})
+    ]);
+    return response(req,env,{ok:true});
+   }
    if(user.role!=='admin')return fail(req,env,'Δεν έχετε δικαίωμα καταχώρισης.',403);
    if(path==='/api/statements/payments/batch'&&method==='POST'){
     const b=await jsonBody(req);
