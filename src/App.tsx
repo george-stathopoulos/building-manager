@@ -119,7 +119,7 @@ function App(){
  }
 
  const declarationDate=new Date().toISOString().slice(0,10);
- const [ownerView,setOwnerView]=useState<'pending'|'stats'|'history'|'notifications'>('pending');
+ const [ownerView,setOwnerView]=useState<'pending'|'stats'|'history'|'notifications'|'contact'>('pending');
  const [declarationBusy,setDeclarationBusy]=useState(false);
  async function loadDeclarations(){try{const r=await request<{declarations:PaymentDeclaration[];unread_payment_count:number}>('/payment-declarations');setDeclarations(r.declarations);setUnreadPaymentCount(r.unread_payment_count||0);await loadHeatingRequests();}catch(e){setStatus((e as Error).message);}}
  function openResidentNews(){setResidentNewsSection('menu');setTab('announcements');}
@@ -155,6 +155,7 @@ function App(){
  const [messageBody,setMessageBody]=useState('');
  const [messageReply,setMessageReply]=useState<Record<string,string>>({});
  const [messageBusy,setMessageBusy]=useState(false);
+ useEffect(()=>{if(tab==='announcements'&&data?.role==='admin')void loadResidentMessages();},[tab,data?.role]);
  async function loadResidentMessages(){try{setResidentMessages(await request('/resident-messages'));}catch(e){setStatus((e as Error).message);}}
  async function sendResidentMessage(){setMessageBusy(true);setStatus('');try{await request('/resident-messages',{method:'POST',body:JSON.stringify({subject:messageSubject,body:messageBody})});setMessageSubject('');setMessageBody('');await loadResidentMessages();setStatus('Το μήνυμά σας στάλθηκε στον διαχειριστή.');}catch(e){setStatus((e as Error).message);}finally{setMessageBusy(false);}}
  async function replyResidentMessage(id:string){const reply=messageReply[id]?.trim();if(!reply)return;setMessageBusy(true);try{await request('/resident-messages/reply',{method:'POST',body:JSON.stringify({id,reply})});await loadResidentMessages();setStatus('Η απάντηση στάλθηκε.');}catch(e){setStatus((e as Error).message);}finally{setMessageBusy(false);}}
@@ -299,9 +300,10 @@ function App(){
   <nav className="owner-navigation" aria-label="Ενότητες ιδιοκτήτη">
    <button type="button" className={ownerView==='pending'?'selected':''} onClick={()=>setOwnerView('pending')}>Πληρωμές ({pending.length})</button>
    <button type="button" className={ownerView==='stats'?'selected':''} onClick={()=>setOwnerView('stats')}>Στατιστικά</button>
-   <button type="button" className={ownerView==='history'?'selected':''} onClick={()=>setOwnerView('history')}>Ιστορικό</button><button type="button" className={ownerView==='notifications'?'selected':''} onClick={()=>setOwnerView('notifications')}>Ειδοποιήσεις</button>
+   <button type="button" className={ownerView==='history'?'selected':''} onClick={()=>setOwnerView('history')}>Ιστορικό</button><button type="button" className={ownerView==='notifications'?'selected':''} onClick={()=>setOwnerView('notifications')}>Ειδοποιήσεις</button><button type="button" className={ownerView==='contact'?'selected':''} onClick={()=>{setOwnerView('contact');void loadResidentMessages();}}>Μήνυμα διαχειριστή</button>
   </nav>
   {ownerView==='notifications'&&<main><PushSettings/></main>}
+  {ownerView==='contact'&&<main><h2>Μήνυμα προς διαχειριστή</h2><form className="announcement-composer" onSubmit={e=>{e.preventDefault();void sendResidentMessage();}}><label>Θέμα<input required maxLength={120} value={messageSubject} onChange={e=>setMessageSubject(e.target.value)}/></label><label>Μήνυμα<textarea required maxLength={3000} rows={5} value={messageBody} onChange={e=>setMessageBody(e.target.value)}/></label><button disabled={messageBusy||!messageSubject.trim()||!messageBody.trim()}>Αποστολή</button></form><h3>Ιστορικό μηνυμάτων</h3>{residentMessages?.messages.map(m=><article className="owner-payment-card" key={m.id}><strong>{m.subject}</strong><p>{m.body}</p><small>{m.reply?'Απάντηση διαχειριστή: '+m.reply:'Αναμονή απάντησης'}</small></article>)}</main>}
   {ownerView==='pending'&&<main><h2>Πληρωμές για επιβεβαίωση</h2><p>Πατήστε «Έλαβα τα χρήματα» μόνο όταν έχετε λάβει την πληρωμή.</p>
    {!pending.length&&<div className="owner-payment-card"><strong>Δεν υπάρχουν πληρωμές σε αναμονή.</strong></div>}
    {pending.map(d=><article className="owner-payment-card" key={d.id}><h3>Διαμέρισμα {d.apartment_code}</h3><p>{d.kind==='common'?'Κοινόχρηστα '+(d.month||''):'Πετρέλαιο θέρμανσης'}</p><strong className="owner-amount">{money(d.amount_cents)}</strong><p>Δήλωση: {new Date(d.declared_on+'T12:00:00').toLocaleDateString('el-GR')}</p><button type="button" className="owner-confirm" disabled={declarationBusy} onClick={()=>reviewDeclaration(d.id,'confirmed')}>✓ Έλαβα τα χρήματα</button><button type="button" className="owner-reject" disabled={declarationBusy} onClick={()=>reviewDeclaration(d.id,'rejected')}>Δεν έχω λάβει χρήματα</button></article>)}
