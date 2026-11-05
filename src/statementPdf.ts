@@ -1,5 +1,5 @@
 /** Create a self-contained PDF using browser canvas so Greek text is rendered with the device fonts. */
-export async function saveStatementPdf(input:{address:string;month:string;apartment:string;items:{name:string;amount:string}[];total:string;due:string;paid:string;balance:string}):Promise<void>{
+export async function saveStatementPdf(input:{address:string;month:string;apartment:string;items:{name:string;amount:string}[];total:string;due:string;paid:string;balance:string;credit?:string;grossDue?:string}):Promise<void>{
  const width=1240, height=1754, margin=90, line=43;
  const pages:HTMLCanvasElement[]=[];let canvas=document.createElement('canvas');const initialContext=canvas.getContext('2d');if(!initialContext)throw new Error('Δεν υποστηρίζεται η δημιουργία PDF σε αυτή τη συσκευή.');let ctx:CanvasRenderingContext2D=initialContext;
  let y=margin;
@@ -12,7 +12,7 @@ export async function saveStatementPdf(input:{address:string;month:string;apartm
  write('Αναλυτικές δαπάνες',true,32);
  for(const item of input.items)entry(item.name,item.amount);
  y+=15;entry('Σύνολο πολυκατοικίας',input.total);y+=30;
- write('Διαμέρισμα '+input.apartment,true,32);entry('Χρέωση',input.due);entry('Πληρωμένο',input.paid);entry('Υπόλοιπο',input.balance);
+ write('Διαμέρισμα '+input.apartment,true,32);if(input.grossDue&&input.credit){entry('Αρχική χρέωση',input.grossDue);entry('Πίστωση εξόδων εφαρμογής','−'+input.credit);}entry('Χρέωση',input.due);entry('Πληρωμένο',input.paid);entry('Υπόλοιπο',input.balance);
  pages.push(canvas);
  // Encode each page as JPEG and place it on an A4 PDF page without external dependencies.
  const encoder=new TextEncoder();const chunks:Uint8Array[]=[];let offset=0;const offsets:number[]=[0];
