@@ -381,3 +381,7 @@ button,a,input,select,textarea,summary,[role="button"]{touch-action:manipulation
 .undo-toast{position:fixed;bottom:calc(1.2rem + env(safe-area-inset-bottom,0px));left:50%;transform:translateX(-50%);z-index:9999;width:min(92vw,570px);display:flex;align-items:center;justify-content:space-between;gap:1rem;padding:1rem 1.2rem;background:#142b3c;color:#fff;border:1px solid #7db8dc;border-radius:14px;box-shadow:0 12px 40px #0005}
 .undo-toast span{display:flex;flex-direction:column;gap:.25rem;min-width:0}.undo-toast strong{font-size:.95rem}.undo-toast small{color:#d3e6f4;font-size:.82rem}.undo-toast button{flex-shrink:0;border:0;border-radius:9px;padding:.7rem .9rem;background:#fff;color:#142b3c;font-weight:700;cursor:pointer}
 @media(max-width:520px){.undo-toast{flex-direction:column;align-items:stretch;bottom:calc(4.7rem + env(safe-area-inset-bottom,0px))}.undo-toast button{width:100%}}
+
+/* A2 and B3 are automatically settled, not actual received payments. */
+.payment-badge--auto{background:#e4f6ed!important;color:#367b61!important;border:1px solid #bce7d0!important}
+.payment-badge--auto .payment-badge-icon{color:#4a9d77!important}
