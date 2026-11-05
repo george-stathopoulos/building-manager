@@ -1,5 +1,6 @@
+import {validPushSubscription,notifyApartment,notifyReviewers,notifyAll} from './push';
 import {calculateFuelAccounts,type FuelApartment,type FuelReading,type FuelTank,type FuelDelivery,type FuelPayment,type FuelOpening,type FuelSettings} from './fuel-model';
-interface Env {DB:D1Database; WEB_ORIGIN:string}
+interface Env {DB:D1Database; WEB_ORIGIN:string; VAPID_PUBLIC_KEY?:string; VAPID_PRIVATE_KEY?:string; VAPID_SUBJECT?:string}
 type DbUser={id:string;email:string;role:'admin'|'resident';salt:string;password_hash:string};
 type Apartment={id:string;code:string;common_weight:number;heating_share_bp:number};
 const encoder=new TextEncoder();
@@ -30,7 +31,7 @@ function audit(env:Env,actor:string,action:string,type:string,id:string,details:
 async function myApartmentIds(env:Env,user:DbUser){if(user.role==='admin')return null;const r=await env.DB.prepare('SELECT apartment_id FROM memberships WHERE user_id=?').bind(user.id).all<{apartment_id:string}>();return r.results.map(x=>x.apartment_id);}
 function allocate(total:number,apartments:Apartment[],method:string){const weights=apartments.map(a=>method==='shares'?a.common_weight:1);const weightSum=weights.reduce((a,b)=>a+b,0);const exact=weights.map(w=>total*w/weightSum);const amounts=exact.map(Math.floor);const left=total-amounts.reduce((a,b)=>a+b,0);const order=exact.map((n,i)=>({i,part:n-Math.floor(n)})).sort((a,b)=>b.part-a.part||a.i-b.i);for(let i=0;i<left;i++)amounts[order[i].i]++;return amounts;}
 export default {
- async fetch(req:Request,env:Env):Promise<Response>{
+ async fetch(req:Request,env:Env,ctx:ExecutionContext):Promise<Response>{
   try{
    const url=new URL(req.url);const path=url.pathname;const method=req.method;
    if(!permittedOrigin(req,env))return fail(req,env,'Μη επιτρεπτή προέλευση.',403);
@@ -104,6 +105,21 @@ export default {
    const canReview=user.role==='admin'||owner;
    const effectiveRole=owner?'owner':user.role;
    if(path==='/api/account'&&method==='GET')return response(req,env,{role:effectiveRole,apartment_code:myPin?(await env.DB.prepare('SELECT code FROM apartments WHERE id=?').bind(myPin.apartment_id).first<{code:string}>())?.code:null,must_change:Boolean(myPin?.must_change)});
+   if(path==='/api/push/config'&&method==='GET')return response(req,env,{enabled:Boolean(env.VAPID_PUBLIC_KEY&&env.VAPID_PRIVATE_KEY&&env.VAPID_SUBJECT),public_key:env.VAPID_PUBLIC_KEY||null});
+   if(path==='/api/push/subscribe'&&method==='POST'){
+    if(!env.VAPID_PUBLIC_KEY||!env.VAPID_PRIVATE_KEY||!env.VAPID_SUBJECT)return fail(req,env,'Οι ειδοποιήσεις push δεν έχουν ενεργοποιηθεί στον διακομιστή.',503);
+    const b=await jsonBody(req);
+    if(!validPushSubscription(b.subscription))return fail(req,env,'Μη έγκυρη συνδρομή ειδοποιήσεων.');
+    const sub=b.subscription;
+    await env.DB.prepare('INSERT INTO push_subscriptions(id,user_id,endpoint,p256dh,auth,created_at,updated_at) VALUES(?,?,?,?,?,?,?) ON CONFLICT(endpoint) DO UPDATE SET user_id=excluded.user_id,p256dh=excluded.p256dh,auth=excluded.auth,updated_at=excluded.updated_at').bind(uuid(),user.id,sub.endpoint,sub.keys.p256dh,sub.keys.auth,iso(),iso()).run();
+    return response(req,env,{ok:true});
+   }
+   if(path==='/api/push/unsubscribe'&&method==='POST'){
+    const b=await jsonBody(req);
+    if(typeof b.endpoint!=='string'||b.endpoint.length>2048)return fail(req,env,'Μη έγκυρη συνδρομή.');
+    await env.DB.prepare('DELETE FROM push_subscriptions WHERE user_id=? AND endpoint=?').bind(user.id,b.endpoint).run();
+    return response(req,env,{ok:true});
+   }
    if(path==='/api/admin/pins'&&method==='GET'){
     if(user.role!=='admin')return fail(req,env,'Δεν επιτρέπεται.',403);
     const rows=(await env.DB.prepare('SELECT a.code,c.must_change,c.updated_at FROM apartments a LEFT JOIN apartment_pin_credentials c ON c.apartment_id=a.id ORDER BY a.code').all()).results;
@@ -322,6 +338,7 @@ export default {
      env.DB.prepare('INSERT INTO payment_declarations(id,apartment_id,kind,month,amount_cents,declared_on,status,declared_by,created_at) VALUES(?,?,?,?,?,?,?,?,?)').bind(id,apt.id,b.kind,month,amount,b.declared_on,'pending',user.id,timestamp),
      audit(env,user.id,'payment_declared','payment_declaration',id,{apartment_code:apt.code,kind:b.kind,month,amount_cents:amount})
     ]);}catch{return fail(req,env,'Υπάρχει ήδη αίτημα επιβεβαίωσης για αυτόν τον μήνα ή η καταχώριση απέτυχε.',409);}
+    ctx.waitUntil(notifyReviewers(env));
     return response(req,env,{ok:true,id},201);
    }
    if(path==='/api/payment-declarations/review'&&method==='POST'){
@@ -349,6 +366,7 @@ export default {
     writes.push(audit(env,user.id,'payment_declaration_reviewed','payment_declaration',b.id,{decision:b.decision,apartment_code:row.apartment_code,kind:row.kind,amount_cents:row.amount_cents}));
     const result=await env.DB.batch(writes);
     if(result[0].meta.changes!==1)return fail(req,env,'Το αίτημα έχει ήδη εξεταστεί.',409);
+    ctx.waitUntil(notifyApartment(env,row.apartment_id));
     return response(req,env,{ok:true});
    }
    if(path==='/api/payment-declarations/reverse'&&method==='POST'){
@@ -489,6 +507,7 @@ export default {
      env.DB.prepare('INSERT INTO announcements(id,title,body,published_at,created_by,created_at) VALUES(?,?,?,?,?,?)').bind(id,b.title.trim(),b.body.trim(),timestamp,user.id,timestamp),
      audit(env,user.id,'announcement_published','announcement',id,{title:b.title.trim()})
     ]);
+    ctx.waitUntil(notifyAll(env));
     return response(req,env,{ok:true,id},201);
    }
    if(path==='/api/announcements/delete'&&method==='POST'){
