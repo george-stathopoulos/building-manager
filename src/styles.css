@@ -391,3 +391,8 @@ button,a,input,select,textarea,summary,[role="button"]{touch-action:manipulation
 .pin-code-input::placeholder{letter-spacing:.65em;color:#a5b7bf;opacity:1}
 .pin-hint{font-size:.85rem;color:#65828d;font-weight:500;margin-left:.35rem}
 .pin-progress{display:block;font-size:.8rem;color:#69818e;margin-top:.35rem}
+
+/* Consistent, explicit section navigation: labeled tap target rather than a bare back arrow. */
+.resident-section-nav-button{display:inline-flex;align-items:center;justify-content:center;gap:10px;min-height:44px;padding:11px 17px;margin:0 0 18px;border:1px solid #b9dcd8;border-radius:12px;background:#e9f7f4;color:#176f67;font-size:14px;font-weight:700;cursor:pointer;box-shadow:0 2px 6px #123b3810}
+.resident-section-nav-button:hover,.resident-section-nav-button:focus-visible{background:#d8f0eb;border-color:#75bdb3}
+.resident-section-nav-button svg{width:18px;height:18px;flex:none}
