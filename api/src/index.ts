@@ -1,4 +1,4 @@
-import {validPushSubscription,notifyApartment,notifyReviewers,notifyAll} from './push';
+import {validPushSubscription,notifyApartment,notifyReviewers,notifyAll,sendPushToUsers} from './push';
 import {calculateFuelAccounts,type FuelApartment,type FuelReading,type FuelTank,type FuelDelivery,type FuelPayment,type FuelOpening,type FuelSettings} from './fuel-model';
 interface Env {DB:D1Database; WEB_ORIGIN:string; VAPID_PUBLIC_KEY?:string; VAPID_PRIVATE_KEY?:string; VAPID_SUBJECT?:string}
 type DbUser={id:string;email:string;role:'admin'|'resident';salt:string;password_hash:string};
@@ -169,6 +169,46 @@ export default {
      excluded:model.excluded,period_count:model.periodCount,
      note:'Όλες οι ιστορικές καταναλώσεις έως την ημερομηνία εκκαθάρισης έχουν εξοφληθεί. Οι νέες εκτιμήσεις υπολογίζονται μόνο από επόμενες μετρήσεις. Τυχόν υπόλοιπο πίστωσης απαιτεί ξεχωριστή συμφωνία.'
     });
+   }
+   if(path==='/api/resident-messages'&&method==='GET'){
+    if(user.role==='admin'){
+     const messages=(await env.DB.prepare('SELECT m.id,m.subject,m.body,m.created_at,m.read_at,m.reply,m.replied_at,a.code AS apartment_code FROM resident_messages m JOIN apartments a ON a.id=m.apartment_id ORDER BY m.created_at DESC LIMIT 200').all()).results;
+     return response(req,env,{messages,unread_count:messages.filter((m:any)=>!m.read_at).length});
+    }
+    const own=await myApartmentIds(env,user);
+    if(!own?.length)return fail(req,env,'Δεν βρέθηκε διαμέρισμα.',403);
+    const messages=(await env.DB.prepare('SELECT m.id,m.subject,m.body,m.created_at,m.read_at,m.reply,m.replied_at,a.code AS apartment_code FROM resident_messages m JOIN apartments a ON a.id=m.apartment_id WHERE m.apartment_id IN ('+own.map(()=>'?').join(',')+') ORDER BY m.created_at DESC LIMIT 100').bind(...own).all()).results;
+    return response(req,env,{messages,unread_count:messages.filter((m:any)=>m.reply&&!m.read_at).length});
+   }
+   if(path==='/api/resident-messages'&&method==='POST'){
+    if(user.role==='admin')return fail(req,env,'Η αποστολή από αυτή τη φόρμα αφορά κατοίκους.',403);
+    const own=await myApartmentIds(env,user);
+    if(!own?.length)return fail(req,env,'Δεν βρέθηκε διαμέρισμα.',403);
+    const b=await jsonBody(req);
+    if(typeof b.subject!=='string'||typeof b.body!=='string'||!b.subject.trim()||!b.body.trim()||b.subject.trim().length>120||b.body.trim().length>3000)return fail(req,env,'Συμπληρώστε θέμα (έως 120 χαρακτήρες) και μήνυμα (έως 3.000 χαρακτήρες).');
+    const id=uuid();
+    await env.DB.prepare('INSERT INTO resident_messages(id,apartment_id,sender_user_id,subject,body,created_at) VALUES(?,?,?,?,?,?)').bind(id,own[0],user.id,b.subject.trim(),b.body.trim(),iso()).run();
+    const admins=(await env.DB.prepare("SELECT id FROM users WHERE role='admin'").all<{id:string}>()).results;
+    ctx.waitUntil(sendPushToUsers(env,admins.map(a=>a.id)));
+    return response(req,env,{ok:true,id},201);
+   }
+   if(path==='/api/resident-messages/read'&&method==='POST'){
+    if(user.role!=='admin')return fail(req,env,'Δεν επιτρέπεται.',403);
+    const b=await jsonBody(req);
+    if(typeof b.id!=='string')return fail(req,env,'Μη έγκυρο μήνυμα.');
+    await env.DB.prepare('UPDATE resident_messages SET read_at=COALESCE(read_at,?) WHERE id=?').bind(iso(),b.id).run();
+    return response(req,env,{ok:true});
+   }
+   if(path==='/api/resident-messages/reply'&&method==='POST'){
+    if(user.role!=='admin')return fail(req,env,'Δεν επιτρέπεται.',403);
+    const b=await jsonBody(req);
+    if(typeof b.id!=='string'||typeof b.reply!=='string'||!b.reply.trim()||b.reply.trim().length>3000)return fail(req,env,'Συμπληρώστε απάντηση έως 3.000 χαρακτήρες.');
+    const msg=await env.DB.prepare('SELECT apartment_id,replied_at FROM resident_messages WHERE id=?').bind(b.id).first<{apartment_id:string;replied_at:string|null}>();
+    if(!msg)return fail(req,env,'Το μήνυμα δεν βρέθηκε.',404);
+    if(msg.replied_at)return fail(req,env,'Έχει ήδη δοθεί απάντηση.',409);
+    await env.DB.prepare('UPDATE resident_messages SET reply=?,replied_at=?,replied_by=?,read_at=COALESCE(read_at,?) WHERE id=? AND replied_at IS NULL').bind(b.reply.trim(),iso(),user.id,iso(),b.id).run();
+    ctx.waitUntil(notifyApartment(env,msg.apartment_id));
+    return response(req,env,{ok:true});
    }
    if(path==='/api/announcements'&&method==='GET'){
     const own=await myApartmentIds(env,user);
