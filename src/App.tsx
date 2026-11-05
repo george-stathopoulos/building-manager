@@ -65,9 +65,7 @@ function App(){
 
  const [loading,setLoading]=useState(false);
  const [isConfigured,setIsConfigured]=useState<boolean|null>(null);
- 
- const [authEmail,setAuthEmail]=useState('');
- const [password,setPassword]=useState('');
+
  const [loginMode,setLoginMode]=useState<'resident'|'admin'>('resident');
  const [pinApartment,setPinApartment]=useState('A1');
  const [loginPin,setLoginPin]=useState('');
@@ -239,7 +237,7 @@ function App(){
  async function doAuth(e?:FormEvent,pinOverride?:string){e?.preventDefault();if(pinLoginInFlight.current)return;if((pinOverride??loginPin).length!==4)return;pinLoginInFlight.current=true;setLoading(true);setStatus('');try{
  const endpoint=loginMode==='resident'?'/pin/login':'/admin/pin/login';
  const args=loginMode==='resident'?{apartment_code:pinApartment,pin:pinOverride??loginPin}:{pin:pinOverride??loginPin};
- const r=await request<{token:string;must_change?:boolean}>(endpoint,{method:'POST',body:JSON.stringify(args)});saveToken(r.token);setFuelAccounts(null);setAnnouncements(null);setPassword('');setLoginPin('');setMustChangePin(Boolean(r.must_change));if(r.must_change){setTab('account');}else{setTab('home');await refresh();}
+ const r=await request<{token:string;must_change?:boolean}>(endpoint,{method:'POST',body:JSON.stringify(args)});saveToken(r.token);setFuelAccounts(null);setAnnouncements(null);setLoginPin('');setMustChangePin(Boolean(r.must_change));if(r.must_change){setTab('account');}else{setTab('home');await refresh();}
  }catch(err){setStatus((err as Error).message);}finally{pinLoginInFlight.current=false;setLoading(false);}}
  async function saveNewPin(e:FormEvent){e.preventDefault();setLoading(true);setStatus('');try{const r=await request<{token:string}>(loginMode==='admin'?'/admin/pin/change':'/account/pin',{method:'POST',body:JSON.stringify({current_pin:currentPin,pin:newPin,confirm_pin:confirmPin})});saveToken(r.token);setCurrentPin('');setNewPin('');setConfirmPin('');setMustChangePin(false);if(mustChangePin)setPushSetupRequired(true);setStatus('Το PIN ενημερώθηκε.');await refresh();}catch(err){setStatus((err as Error).message);}finally{setLoading(false);}}
  async function loadPins(){try{const r=await request<{apartments:typeof pinRows}>('/admin/pins');setPinRows(r.apartments);}catch(err){setStatus((err as Error).message);}}
