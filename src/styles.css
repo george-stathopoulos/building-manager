@@ -486,3 +486,6 @@ button,a,input,select,textarea,summary,[role="button"]{touch-action:manipulation
  .admin-mobile-menu-item.active{background:#dff6ed;color:#0c574e;border-color:#83d6bc}
  .admin-mobile-menu-signout{margin-top:auto;min-height:48px;border-radius:12px;background:#e8f4f2;color:#124b53;font-weight:800}
 }
+
+/* Apartment targeting in admin announcement composer */
+.announcement-targets{border:1px solid #d1e2e2;border-radius:13px;padding:13px 15px;margin:8px 0}.announcement-targets legend{font-weight:800;padding:0 6px}.announcement-targets label{display:flex;align-items:center;gap:9px;min-height:40px;font-weight:600}.announcement-targets input[type=checkbox]{width:20px;height:20px;accent-color:#087f79;flex-shrink:0}.announcement-target-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:5px 12px;margin-top:8px}.announcement-targets small{display:block;margin-top:8px;color:#526e78}
