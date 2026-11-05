@@ -397,7 +397,7 @@ export default {
      const apartments=(await env.DB.prepare('SELECT id,code,common_weight,heating_share_bp FROM apartments ORDER BY code').all<Apartment>()).results;
      const due=allocate((JSON.parse(statement.items_json) as Array<{amount_cents:number}>).reduce((n,x)=>n+x.amount_cents,0),apartments,statement.method);
      const already=await env.DB.prepare('SELECT paid_cents FROM statement_payments WHERE month=? AND apartment_id=?').bind(month,apt.id).first<{paid_cents:number}>();
-     amount=Math.max(0,due[apartments.findIndex(a=>a.id===apt.id)]-(already?.paid_cents||0));
+     amount=Math.max(0,netCommonDue(apt.code,due[apartments.findIndex(a=>a.id===apt.id)])-(already?.paid_cents||0));
      if(!amount)return fail(req,env,'Τα κοινόχρηστα είναι ήδη εξοφλημένα.');
     }else{
      if(!cents(b.amount_cents))return fail(req,env,'Συμπληρώστε έγκυρο ποσό θέρμανσης.');
@@ -430,7 +430,8 @@ export default {
      const st=await env.DB.prepare('SELECT method,items_json FROM monthly_statements WHERE month=?').bind(row.month).first<{method:string;items_json:string}>();
      if(!st)return fail(req,env,'Η μηνιαία κατάσταση δεν βρέθηκε.',409);
      const a=(await env.DB.prepare('SELECT id,code,common_weight,heating_share_bp FROM apartments ORDER BY code').all<Apartment>()).results;
-     const due=allocate((JSON.parse(st.items_json) as Array<{amount_cents:number}>).reduce((n,x)=>n+x.amount_cents,0),a,st.method)[a.findIndex(x=>x.id===row.apartment_id)];
+     const grossDue=allocate((JSON.parse(st.items_json) as Array<{amount_cents:number}>).reduce((n,x)=>n+x.amount_cents,0),a,st.method)[a.findIndex(x=>x.id===row.apartment_id)];
+     const due=netCommonDue(a.find(x=>x.id===row.apartment_id)!.code,grossDue);
      writes.push(env.DB.prepare("INSERT INTO statement_payments(month,apartment_id,paid_cents,paid_on,updated_by,updated_at) SELECT ?,apartment_id,?,?,?,? FROM payment_declarations WHERE id=? AND status='confirmed' AND reviewed_by=? AND reviewed_at=? ON CONFLICT(month,apartment_id) DO UPDATE SET paid_cents=excluded.paid_cents,paid_on=excluded.paid_on,updated_by=excluded.updated_by,updated_at=excluded.updated_at").bind(row.month,due,row.declared_on,user.id,timestamp,b.id,user.id,timestamp));
     }
     writes.push(audit(env,user.id,'payment_declaration_reviewed','payment_declaration',b.id,{decision:b.decision,apartment_code:row.apartment_code,kind:row.kind,amount_cents:row.amount_cents}));
@@ -480,7 +481,7 @@ export default {
     for(const code of codes){
       const i=apartments.findIndex(a=>a.code===code),a=apartments[i];
       const before=await env.DB.prepare('SELECT paid_cents,paid_on FROM statement_payments WHERE month=? AND apartment_id=?').bind(b.month,a.id).first();
-      const paidCents=b.paid?due[i]:0;
+      const paidCents=b.paid?netCommonDue(code,due[i]):0;
       writes.push(env.DB.prepare('INSERT INTO statement_payments(month,apartment_id,paid_cents,paid_on,updated_by,updated_at) VALUES(?,?,?,?,?,?) ON CONFLICT(month,apartment_id) DO UPDATE SET paid_cents=excluded.paid_cents,paid_on=excluded.paid_on,updated_by=excluded.updated_by,updated_at=excluded.updated_at').bind(b.month,a.id,paidCents,b.paid?day:null,user.id,timestamp));
       writes.push(audit(env,user.id,'statement_payment_updated','statement_payment',b.month+':'+a.code,{before,after:{paid_cents:paidCents,paid_on:b.paid?day:null},month:b.month,apartment_code:a.code,bulk:true}));
     }
@@ -498,7 +499,7 @@ export default {
     if(!target)return fail(req,env,'Άγνωστο διαμέρισμα.');
     const total=(JSON.parse(statement.items_json) as Array<{amount_cents:number}>).reduce((n,x)=>n+x.amount_cents,0);
     const allocations=allocate(total,apartments,statement.method);
-    const due=allocations[apartments.findIndex(a=>a.id===target.id)];
+    const due=netCommonDue(target.code,allocations[apartments.findIndex(a=>a.id===target.id)]);
     const paidCents=b.paid?due:0;
     const paidOn=b.paid?iso().slice(0,10):null;
     const before=await env.DB.prepare('SELECT paid_cents,paid_on FROM statement_payments WHERE month=? AND apartment_id=?').bind(b.month,target.id).first();
