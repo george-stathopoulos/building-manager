@@ -48,6 +48,7 @@ function ResidentMonthExpense({month,code,due,paid,balance,pending=false}:{month
 function App(){
  const [tab,setTab]=useState<Tab>('home');
  const [residentNewsSection,setResidentNewsSection]=useState<'menu'|'notifications'|'news'|'contact'>('menu');
+ const [ownerView,setOwnerView]=useState<'pending'|'reviews'|'notifications'>('pending');
  const [homeIntroVisible,setHomeIntroVisible]=useState(true);
 
  const [data,setData]=useState<Overview|null>(configured?null:demo);
@@ -119,7 +120,6 @@ function App(){
  }
 
  const declarationDate=new Date().toISOString().slice(0,10);
- const [ownerView,setOwnerView]=useState<'pending'|'reviews'|'notifications'>('pending');
  const [declarationBusy,setDeclarationBusy]=useState(false);
  async function loadDeclarations(){try{const r=await request<{declarations:PaymentDeclaration[];unread_payment_count:number}>('/payment-declarations');setDeclarations(r.declarations);setUnreadPaymentCount(r.unread_payment_count||0);await loadHeatingRequests();}catch(e){setStatus((e as Error).message);}}
  function openResidentNews(){setResidentNewsSection('menu');setTab('announcements');}
