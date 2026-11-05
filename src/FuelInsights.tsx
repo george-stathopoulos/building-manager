@@ -32,9 +32,10 @@ export function FuelInsights({fuel,account,year:externalYear,onYearChange,compac
   </div>
   {!compact&&<div className="fuel-insights-charts">
    <div><h4>Ώρες θέρμανσης {suffix}</h4><FlexibleChart title={'Ώρες θέρμανσης '+suffix+(account?.apartment_code||'κτίριο')} data={graph} unit="ώρες" initial="bar"/></div>
-   <div><h4>Εκτιμώμενα λίτρα {suffix}</h4><FlexibleChart title={'Λίτρα θέρμανσης '+suffix+(account?.apartment_code||'κτίριο')} data={litersGraph} unit="L" initial="line"/></div>
+   <div><h4>Εκτιμώμενα λίτρα που καταναλώθηκαν {suffix}</h4><FlexibleChart title={'Λίτρα θέρμανσης '+suffix+(account?.apartment_code||'κτίριο')} data={litersGraph} unit="L" initial="line"/></div>
   </div>}
   {!compact&&year!=='all'&&<PeriodComparison current={[{label:year,value:t.liters}]} previous={previous.length?[{label:String(Number(year)-1),value:prior.liters}]:[]} unit="L"/>}
+  {account&&<p className="fuel-insights-note">Το γράφημα δείχνει μόνο την εκτιμώμενη κατανάλωση ανά μήνα, όχι το υπόλοιπο πίστωσης. Μηδενική κατανάλωση δεν σημαίνει μηδενικό διαθέσιμο πετρέλαιο ή μηδενική πίστωση. Η οικονομική ισοδυναμία της πίστωσης σε λίτρα εμφανίζεται χωριστά στον λογαριασμό θέρμανσης.</p>}
   <p className="fuel-insights-note">Τα λίτρα υπολογίζονται από τη μεταβολή της δεξαμενής και τους ανεφοδιασμούς. {account?'Τα λίτρα επιμερίζονται σύμφωνα με τις ώρες του διαμερίσματος.':'Οι ώρες είναι το άθροισμα των ωρών των διαμερισμάτων, όχι οι ώρες λειτουργίας του καυστήρα.'} Η τιμή €/ώρα είναι ενδεικτική και δεν αποτελεί χρέωση. Οι εξοφλημένες ιστορικές περίοδοι περιλαμβάνονται μόνο για στατιστική σύγκριση.</p>
   {fuel.excluded.length>0&&<p className="fuel-amber">{fuel.excluded.length} περίοδοι εξαιρέθηκαν λόγω ελλιπών ή ασυνεπών μετρήσεων.</p>}
  </section>;
