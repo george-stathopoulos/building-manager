@@ -1,19 +1,19 @@
 {
-  "name": "Διαχείριση Πολυκατοικίας",
-  "short_name": "Πολυκατοικία",
-  "description": "Κοινόχρηστα και θέρμανση",
+  "name": "Π Σάμου 4",
+  "short_name": "Σάμου 4",
+  "description": "Η πολυκατοικία μας · Σάμου 4",
   "lang": "el",
   "start_url": "/building-manager/",
   "scope": "/building-manager/",
   "display": "standalone",
-  "background_color": "#f4f6f8",
-  "theme_color": "#142b3c",
+  "background_color": "#073347",
+  "theme_color": "#073347",
   "icons": [
     {
-      "src": "icon.svg",
+      "src": "icon.svg?v=2",
       "sizes": "any",
       "type": "image/svg+xml",
-      "purpose": "any"
+      "purpose": "any maskable"
     }
   ]
 }
