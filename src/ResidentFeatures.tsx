@@ -41,7 +41,12 @@ export function FuelAccountSummary({account,compact=false,priceCentsPerLiter,hea
    <div className="table-wrap"><table><thead><tr><th>Περίοδος</th><th>Ώρες</th><th>Λίτρα (εκτ.)</th><th>Κόστος (εκτ.)</th></tr></thead>
     <tbody>{account.periods.map(p=><tr key={p.start+'|'+p.end}><td>{dateGreek(p.start)} – {dateGreek(p.end)}</td><td>{p.hours.toLocaleString('el-GR',{maximumFractionDigits:2})}</td><td>{p.liters.toLocaleString('el-GR',{maximumFractionDigits:2})}</td><td>{money(p.cost_cents)}</td></tr>)}</tbody></table></div>
   </details>}
-  {!compact&&<section className="fuel-faq" aria-label="Συχνές ερωτήσεις θέρμανσης">
+  {!compact&&account.warnings.length>0&&<p className="fuel-amber">Απαιτείται έλεγχος ορισμένων περιόδων: {account.warnings.join(' · ')}</p>}
+ </div>;
+}
+
+export function HeatingFaq(){
+ return <div>  <section className="fuel-faq" aria-label="Συχνές ερωτήσεις θέρμανσης">
    <h3>Συχνές ερωτήσεις για τον λογαριασμό θέρμανσης</h3>
    <p className="muted">Οι ώρες, τα λίτρα και τα ποσά κατανάλωσης είναι εκτιμήσεις βάσει διαθέσιμων μετρήσεων. Η πίστωση τηρείται σε ευρώ.</p>
    <details className="fuel-period-details"><summary>Ποιος είναι ο συντελεστής μου και πώς βγαίνει η χρέωση πετρελαίου;</summary><p>Κάθε διαμέρισμα έχει συντελεστή θέρμανσης. Για κάθε περίοδο υπολογίζουμε τις ώρες λειτουργίας του από τη διαφορά δύο ενδείξεων ωρομετρητή. Σταθμισμένες ώρες = ώρες διαμερίσματος × συντελεστής θέρμανσης (ως ποσοστό). Μερίδιο κόστους = συνολικό κόστος πετρελαίου περιόδου × σταθμισμένες ώρες διαμερίσματος ÷ άθροισμα σταθμισμένων ωρών όλων των διαμερισμάτων.</p><p>Παράδειγμα: Α3 με 10 ώρες και 16,75% έχει 10 × 0,1675 = 1,675 σταθμισμένες ώρες. Αν το άθροισμα της πολυκατοικίας είναι 10 σταθμισμένες ώρες και το συνολικό κόστος είναι 100 €, το Α3 χρεώνεται 100 × 1,675 / 10 = 16,75 €. Το 16,75% δεν είναι σταθερό ποσοστό επί του συνολικού λογαριασμού.</p></details>\n   <details className="fuel-period-details"><summary>Πώς μοιράζονται τα κοινόχρηστα;</summary><p>Τα κοινόχρηστα μοιράζονται ισόποσα στα διαμερίσματα που συμμετέχουν στη συγκεκριμένη χρέωση. Ο συντελεστής θέρμανσης δεν χρησιμοποιείται στον υπολογισμό τους. Για παράδειγμα, κοινό έξοδο 60 € που μοιράζεται σε 6 διαμερίσματα αντιστοιχεί σε 10 € ανά διαμέρισμα.</p></details>\n   <details className="fuel-period-details"><summary>Πώς υπολογίζεται το υπόλοιπό μου;</summary><p>Μεταφερόμενη πίστωση σε ευρώ + νέες καταθέσεις − εκτιμώμενο κόστος νέας κατανάλωσης. Η ιστορική πίστωση δεν μετατρέπεται σε σταθερά λίτρα και δεν χρεώνεται ξανά η εξοφλημένη ιστορική κατανάλωση.</p></details>
@@ -52,11 +57,9 @@ export function FuelAccountSummary({account,compact=false,priceCentsPerLiter,hea
    <details className="fuel-period-details"><summary>Γιατί οι ώρες που απομένουν είναι εκτίμηση;</summary><p>Προκύπτουν από την πίστωση και το εκτιμώμενο κόστος ανά ώρα για το διαμέρισμα, με βάση διαθέσιμες μετρήσεις και τον συντελεστή του. Η πραγματική κατανάλωση και η τιμή καυσίμου μπορεί να διαφέρουν. Η πρόβλεψη ανανεώνεται όταν καταχωρίζονται νέες πλήρεις μετρήσεις, χωρίς να απαιτείται εβδομαδιαία καταγραφή.</p></details>
    <details className="fuel-period-details"><summary>Πότε ενημερώνονται τα στοιχεία και τι γίνεται αν λείπει μέτρηση;</summary><p>Οι μετρήσεις μπορούν να γίνονται εβδομαδιαία, μηνιαία ή σε ακανόνιστα διαστήματα. Οι νέες καταθέσεις εμφανίζονται μετά την καταχώρισή τους. Η νέα κατανάλωση υπολογίζεται όταν υπάρχουν έγκυρες διαδοχικές μετρήσεις δεξαμενής και ωρομετρητών. Περίοδοι με ελλιπή ή ασύμβατα στοιχεία εξαιρούνται από την εκτίμηση και επισημαίνονται για έλεγχο.</p></details>
    <details className="fuel-period-details"><summary>Είναι το εμφανιζόμενο ποσό οριστικός λογαριασμός;</summary><p>Όχι. Οι υπολογισμοί κατανάλωσης και οι προβλέψεις είναι ενημερωτικές εκτιμήσεις. Η οριστική συμφωνία γίνεται με τις πραγματικές μετρήσεις, τις καταθέσεις και τα παραστατικά αγοράς πετρελαίου.</p></details>
-  </section>}
-  {!compact&&account.warnings.length>0&&<p className="fuel-amber">Απαιτείται έλεγχος ορισμένων περιόδων: {account.warnings.join(' · ')}</p>}
- </div>;
+  </section>
+</div>;
 }
-
 export function AnnouncementFeed({items,isAdmin,onRead,onArchive,onDelete}:{
  items:AnnouncementView[];isAdmin:boolean;onRead:(id:string)=>void;onArchive:(id:string)=>void;onDelete:(id:string)=>void;
 }){
