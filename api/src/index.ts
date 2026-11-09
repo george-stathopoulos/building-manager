@@ -196,7 +196,7 @@ export default {
      accounts:model.accounts.filter(a=>visible.some(v=>v.code===a.apartment_code)).map(a=>({
       ...a,legacy:legacy.find(x=>visible.some(v=>v.code===a.apartment_code&&v.id===x.apartment_id))||null
      })),
-     excluded:model.excluded,period_count:model.periodCount,
+     excluded:model.excluded,period_count:model.periodCount,inventory_price_cents_per_liter:model.inventory_price_cents_per_liter,inventory_price_estimated:model.inventory_price_estimated,
      note:'Όλες οι ιστορικές καταναλώσεις έως την ημερομηνία εκκαθάρισης έχουν εξοφληθεί. Οι νέες εκτιμήσεις υπολογίζονται μόνο από επόμενες μετρήσεις. Τυχόν υπόλοιπο πίστωσης απαιτεί ξεχωριστή συμφωνία.'
     });
    }
