@@ -23,7 +23,7 @@ function distribute(total:number,weights:number[]):number[]{
  for(let i=0;i<extra;i++)allocated[order[i].i]++;
  return allocated;
 }
-export function calculateFuelAccounts(input:Input):{accounts:FuelAccount[];excluded:string[];periodCount:number}{
+export function calculateFuelAccounts(input:Input):{accounts:FuelAccount[];excluded:string[];periodCount:number;inventory_price_cents_per_liter:number|null;inventory_price_estimated:boolean}{
  const tank=[...input.tank].sort((a,b)=>a.measured_on.localeCompare(b.measured_on));
  const readingsByKey=new Map(input.readings.map(r=>[r.measured_on+'|'+r.apartment_id,r.reading]));
  const accounts=input.apartments.map(a=>({
@@ -39,6 +39,7 @@ export function calculateFuelAccounts(input:Input):{accounts:FuelAccount[];exclu
  let inventoryLiters=Math.max(0,(tank[0]?.centimeters||0)*input.settings.liters_per_cm);
  let inventoryValueCents=inventoryLiters*input.settings.price_cents_per_liter;
  let allWeightedHours=0,allFuelCost=0,periodCount=0;
+ let inventoryPriceEstimated=inventoryLiters>0;
  for(let t=1;t<tank.length;t++){
   const start=tank[t-1],end=tank[t];
   const changes=input.apartments.map(a=>{
@@ -60,6 +61,7 @@ export function calculateFuelAccounts(input:Input):{accounts:FuelAccount[];exclu
   for(const delivery of periodDeliveries){
    inventoryLiters+=delivery.liters;
    inventoryValueCents+=delivery.cost_cents!==undefined?delivery.cost_cents:delivery.liters*input.settings.price_cents_per_liter;
+   if(delivery.cost_cents===undefined){inventoryPriceEstimated=true;}
    if(delivery.cost_cents===undefined)excluded.push('Missing purchase price for delivery '+delivery.delivered_on+'; baseline price used');
   }
   const averageCost=inventoryLiters>0?inventoryValueCents/inventoryLiters:input.settings.price_cents_per_liter;
@@ -118,5 +120,5 @@ export function calculateFuelAccounts(input:Input):{accounts:FuelAccount[];exclu
   }
   if(excluded.length)account.warnings.push(excluded.length+' heating periods excluded from estimates');
  });
- return {accounts,excluded,periodCount};
+ return {accounts,excluded,periodCount,inventory_price_cents_per_liter:inventoryLiters>0?inventoryValueCents/inventoryLiters:null,inventory_price_estimated:inventoryPriceEstimated};
 }
