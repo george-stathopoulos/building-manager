@@ -11,7 +11,7 @@ export type FuelAccountView={
 };
 export type FuelResponse={
  settlement:{settled_through:string;historical_arrears_cents:number;credit_status:string};settings:{liters_per_cm:number;price_cents_per_liter:number};accounts:FuelAccountView[];
- excluded:string[];period_count:number;note:string;
+ excluded:string[];period_count:number;inventory_price_cents_per_liter?:number|null;inventory_price_estimated?:boolean;note:string;
 };
 export type AnnouncementView={
  id:string;title:string;body:string;published_at:string;created_at:string;archived_at:string|null;read:boolean;
@@ -30,7 +30,7 @@ export function FuelAccountSummary({account,compact=false,priceCentsPerLiter}:{a
    <article><small>Εκτιμώμενη νέα κατανάλωση (€)</small><strong>{money(account.estimated_cost_cents)}</strong><span>Εκτίμηση από κατανάλωση, όχι τιμολόγιο</span></article>
    <article><small>Υπόλοιπο πίστωσης θέρμανσης</small><strong>{account.estimated_balance_cents===null?'—':money(account.estimated_balance_cents)}</strong><span>{account.estimated_balance_cents===null?'Απαιτείται επιβεβαίωση αρχικού υπολοίπου':'Μεταφερόμενη πίστωση + νέες πληρωμές − εκτιμώμενη νέα κατανάλωση'}</span></article>
    <article><small>Εκτιμώμενες ώρες που απομένουν</small><strong>{account.remaining_hours===null?'—':fmtHours(account.remaining_hours)}</strong><span>Με εκτιμώμενη τιμή ανά ώρα από διαθέσιμες μετρήσεις του διαμερίσματος</span></article>
-   <article><small>Εκτιμώμενα λίτρα που καλύπτει η πίστωση</small><strong>{creditLiters===null?'—':creditLiters.toLocaleString('el-GR',{maximumFractionDigits:2})+' L'}</strong><span>{creditLiters===null?'Δεν υπάρχει διαθέσιμη αξιόπιστη τιμή €/L ή επιβεβαιωμένη πίστωση':'Υπόλοιπο πίστωσης ÷ ενδεικτική τιμή '+(priceCentsPerLiter!/100).toLocaleString('el-GR',{maximumFractionDigits:2})+' €/L. Οικονομική ισοδυναμία, όχι μετρημένο απόθεμα ή ατομική ποσότητα δεξαμενής.'}</span></article>
+   <article><small>Εκτιμώμενα λίτρα που καλύπτει η πίστωση</small><strong>{creditLiters===null?'—':creditLiters.toLocaleString('el-GR',{maximumFractionDigits:2})+' L'}</strong><span>{creditLiters===null?'Δεν υπάρχει διαθέσιμη αξιόπιστη τιμή €/L ή επιβεβαιωμένη πίστωση':'Υπόλοιπο πίστωσης ÷ εκτιμώμενη μέση τιμή αποθέματος '+(priceCentsPerLiter!/100).toLocaleString('el-GR',{maximumFractionDigits:2})+' €/L. Οικονομική ισοδυναμία, όχι μετρημένο απόθεμα ή ατομική ποσότητα δεξαμενής.'}</span></article>
    <article><small>Νέες ώρες λειτουργίας</small><strong>{fmtHours(account.hours)}</strong><span>Μόνο διαφορές μεταξύ ενδείξεων</span></article>
    <article><small>Νέα εκτιμώμενα λίτρα</small><strong>{account.estimated_liters.toLocaleString('el-GR',{maximumFractionDigits:2})} L</strong><span>Λίτρα που καταναλώθηκαν στη νέα περίοδο, όχι λίτρα που απομένουν από την πίστωση</span></article>
   </div>
