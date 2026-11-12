@@ -1,3 +1,4 @@
+import {commonCalculator} from './common-model';
 import {validPushSubscription,notifyApartment,notifyReviewers,notifyAll,sendPushToUsers} from './push';
 import {calculateFuelAccounts,type FuelApartment,type FuelReading,type FuelTank,type FuelDelivery,type FuelPayment,type FuelOpening,type FuelSettings} from './fuel-model';
 interface Env {DB:D1Database; WEB_ORIGIN:string; VAPID_PUBLIC_KEY?:string; VAPID_PRIVATE_KEY?:string; VAPID_SUBJECT?:string}
@@ -30,9 +31,6 @@ async function session(env:Env,userId:string){const token=randomToken();await en
 function audit(env:Env,actor:string,action:string,type:string,id:string,details:object={}){return env.DB.prepare('INSERT INTO audit_events(id,actor_id,action,entity_type,entity_id,details,created_at) VALUES(?,?,?,?,?,?,?)').bind(uuid(),actor,action,type,id,JSON.stringify(details),iso());}
 async function myApartmentIds(env:Env,user:DbUser){if(user.role==='admin')return null;const r=await env.DB.prepare('SELECT apartment_id FROM memberships WHERE user_id=?').bind(user.id).all<{apartment_id:string}>();return r.results.map(x=>x.apartment_id);}
 function allocate(total:number,apartments:Apartment[],method:string){const weights=apartments.map(a=>method==='shares'?a.common_weight:1);const weightSum=weights.reduce((a,b)=>a+b,0);const exact=weights.map(w=>total*w/weightSum);const amounts=exact.map(Math.floor);const left=total-amounts.reduce((a,b)=>a+b,0);const order=exact.map((n,i)=>({i,part:n-Math.floor(n)})).sort((a,b)=>b.part-a.part||a.i-b.i);for(let i=0;i<left;i++)amounts[order[i].i]++;return amounts;}
-const A3_APP_CREDIT_CENTS=1000;
-function commonCredit(code:string,gross:number){return code==='A3'?Math.min(A3_APP_CREDIT_CENTS,gross):0;}
-function netCommonDue(code:string,gross:number){return gross-commonCredit(code,gross);}
 export default {
  async fetch(req:Request,env:Env,ctx:ExecutionContext):Promise<Response>{
   try{
@@ -131,6 +129,22 @@ export default {
     await replacePin(env,myPin.apartment_id,user.id,b.pin,false);await env.DB.prepare('DELETE FROM sessions WHERE user_id=?').bind(user.id).run();await audit(env,user.id,'resident_pin_changed','apartment',myPin.apartment_id).run();return response(req,env,{token:await session(env,user.id)});
    }
    if(myPin?.must_change&&path!=='/api/logout'&&path!=='/api/account')return fail(req,env,'Αλλάξτε πρώτα το αρχικό PIN.',403);
+   const commonSettings=await env.DB.prepare('SELECT a3_credit_enabled FROM common_expense_settings WHERE id=1').first<{a3_credit_enabled:number}>();
+   if(!commonSettings)return fail(req,env,'Οι ρυθμίσεις κοινοχρήστων δεν είναι διαθέσιμες.',503);
+   const creditEnabled=commonSettings.a3_credit_enabled===1;
+   const {commonCredit,netCommonDue}=commonCalculator(creditEnabled);
+   if(path==='/api/settings/a3-common-credit'&&(method==='GET'||method==='POST')){
+    const allowed=user.role==='admin'||Boolean(await env.DB.prepare("SELECT 1 AS found FROM memberships m JOIN apartments a ON a.id=m.apartment_id WHERE m.user_id=? AND a.code='A3' LIMIT 1").bind(user.id).first());
+    if(!allowed)return fail(req,env,'Δεν επιτρέπεται.',403);
+    if(method==='GET')return response(req,env,{enabled:creditEnabled});
+    const b=await jsonBody(req);
+    if(typeof b.enabled!=='boolean')return fail(req,env,'Μη έγκυρη ρύθμιση.',400);
+    await env.DB.batch([
+     env.DB.prepare('UPDATE common_expense_settings SET a3_credit_enabled=?,updated_by=?,updated_at=? WHERE id=1').bind(b.enabled?1:0,user.id,iso()),
+     audit(env,user.id,'a3_common_credit_updated','common_expense_settings','1',{enabled:b.enabled})
+    ]);
+    return response(req,env,{enabled:b.enabled});
+   }
    const owner= user.role!=='admin' && (await env.DB.prepare("SELECT 1 AS found FROM memberships m JOIN apartments a ON a.id=m.apartment_id WHERE m.user_id=? AND a.code='B3' LIMIT 1").bind(user.id).first())!==null;
    const canReview=user.role==='admin'||owner;
    const effectiveRole=owner?'owner':user.role;
@@ -295,7 +309,7 @@ export default {
       const collectionRows=rows.filter(x=>!['A2','B3'].includes(x.apartment_code));
       return {month:st.month,apartments:rows,due_cents:collectionRows.reduce((n,x)=>n+x.due_cents,0),paid_cents:collectionRows.reduce((n,x)=>n+x.paid_cents,0),balance_cents:collectionRows.reduce((n,x)=>n+x.balance_cents,0),paid_count:collectionRows.filter(x=>x.paid).length,apartment_count:collectionRows.length};
     });
-    return response(req,env,{months});
+    return response(req,env,{months,a3_credit_enabled:creditEnabled});
    }
    if(path==='/api/statements/payments'&&method==='GET'){
     const month=url.searchParams.get('month');

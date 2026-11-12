@@ -108,6 +108,31 @@ jobs:
             const overview=await fetch(base+'/api/overview',{headers:{Authorization:'Bearer '+body.token,'Origin':'https://george-stathopoulos.github.io'}});
             if(!overview.ok)throw Error('Overview failed: HTTP '+overview.status);
             const authHeaders={Authorization:'Bearer '+body.token,'Origin':'https://george-stathopoulos.github.io'};
+            // Read-only verification: never flip the shared production setting during a deploy.
+            const creditResponse=await fetch(base+'/api/settings/a3-common-credit',{headers:authHeaders});
+            const credit=await creditResponse.json();
+            if(!creditResponse.ok||typeof credit.enabled!=='boolean')throw Error('A3 common setting unavailable');
+            const unauth=await fetch(base+'/api/settings/a3-common-credit');
+            if(unauth.status!==401)throw Error('A3 setting must require authentication');
+            const summaryResponse=await fetch(base+'/api/statements/summary',{headers:authHeaders});
+            const summary=await summaryResponse.json();
+            if(!summaryResponse.ok||summary.a3_credit_enabled!==credit.enabled||!Array.isArray(summary.months))throw Error('Common summaries setting mismatch');
+            const latest=summary.months[0];
+            if(latest){
+              const detailResponse=await fetch(base+'/api/statements/detail?month='+latest.month,{headers:authHeaders});
+              const detail=await detailResponse.json();
+              const paymentsResponse=await fetch(base+'/api/statements/payments?month='+latest.month,{headers:authHeaders});
+              const payments=await paymentsResponse.json();
+              if(!detailResponse.ok||!paymentsResponse.ok)throw Error('Common detail/payment verification failed');
+              for(const row of latest.apartments){
+                const expectedCredit=credit.enabled&&row.apartment_code==='A3'?Math.min(1000,row.gross_due_cents):0;
+                if(row.credit_cents!==expectedCredit||row.due_cents!==row.gross_due_cents-expectedCredit)throw Error('Common credit mismatch');
+                for(const rows of [detail.apartments,payments.apartments]){
+                  const match=rows.find(x=>x.apartment_code===row.apartment_code);
+                  if(!match||match.due_cents!==row.due_cents||match.credit_cents!==expectedCredit)throw Error('Common endpoint totals differ');
+                }
+              }
+            }
             const fuel=await fetch(base+'/api/fuel/accounts',{headers:authHeaders});
             if(!fuel.ok)throw Error('Fuel accounts failed: HTTP '+fuel.status);
             const fuelData=await fuel.json();
