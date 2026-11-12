@@ -11,7 +11,7 @@ Updated 2026-11-12.
 - Off means ordinary A3 allocation with no credit. Other apartments, allocation rounding, gross building expenses and heating formulas are unchanged. The €10 credit remains capped at A3's gross monthly charge when enabled.
 - The choice applies to all saved months, not only future months. Existing recorded payments and declarations are not rewritten on toggle. Turning off can reveal an unpaid balance where a discounted charge was previously paid. Re-enabling restores discounted charges.
 - Resident breakdowns, PDF previews, print markup and generated PDFs include credit fields only for a positive server-provided credit. Hard-coded €10 fallbacks were removed. The authorized settings control remains visible so A3/admin can restore the choice.
-- After a save, summaries and payment rows reload; A3 breakdown/PDF state remounts when the setting changes. Other active sessions refresh communal figures when returning to the app and every 60 seconds while visible.
+- After a save, summaries and payment rows reload; A3 breakdown/PDF state remounts when the setting changes. Other active sessions refresh their data when returning to the app and every 60 seconds while visible.
 
 ## Published release
 
@@ -22,6 +22,13 @@ User authorized publication on 2026-11-12. Feature commit `cf94b893a84bb37c12a7e
 - App deployment: [43201114502](https://github.com/george-stathopoulos/building-manager/actions/runs/43201114502), successful, including all 17 tests, API check and production build.
 - Verified live app HTTP 200 and deployed script `/building-manager/assets/index-CoMtSXSE.js` containing the new setting route/state. API health returned `{"ok":true}`; unauthenticated setting access returned 401. Authenticated deployment checks verified persisted setting and matching detail/summary/payment calculations.
 - The live toggle was not changed for testing. Interactive A3/admin testing, PDF inspection and a second-session off/on check remain for the user. Access the toggle in **Λογαριασμός**.
+
+## Automatic refresh on reopening — 2026-11-12
+
+- The installed app may resume an old document from memory. `src/appUpdates.ts` checks the published module entry on launch, return to the foreground, page restoration and reconnect. A changed entry reloads the app; the saved login is retained. The check uses no-store plus a unique query so even the previous v1 worker cannot serve a cached version check.
+- Service worker v2 installs a fresh app shell, claims clients and navigates existing app windows once when replacing the v1 cache. This bootstraps the update checker in old running screens. Other apps' windows and caches are left alone. Navigation uses fresh network HTML with an offline shell fallback. Explicit no-store requests and financial data bypass app caches.
+- Data refresh now includes overview, statements, summaries, fuel accounts and notifications on resume/reconnect, plus active payment/owner views. Cached resident breakdown/PDF components reset on resume so they fetch current details. The background visible refresh remains every 60 seconds. Heating calculation rules and the saved A3 setting are unchanged.
+- 24 tests pass, including targeted update detection, unchanged/offline/error cases, service-worker cache bypass, scoped upgrades and offline navigation fallback. Production app build passes.
 
 ## Verification
 
