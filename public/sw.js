@@ -22,6 +22,8 @@ self.addEventListener('activate',event=>{
 self.addEventListener('fetch',event=>{
  const req=event.request,url=new URL(req.url);
  if(req.method!=='GET'||url.origin!==location.origin||!req.url.startsWith(SCOPE))return;
+ // Never pin installed-app metadata to an old app cache.
+ if(url.pathname===new URL('manifest.webmanifest',SCOPE).pathname){event.respondWith(fetch(req,{cache:'no-store'}));return;}
  // Financial data and explicit freshness checks must never be served from app caches.
  if(req.cache==='no-store'||url.pathname.includes('/api/')){event.respondWith(fetch(req));return;}
  if(req.mode==='navigate'){

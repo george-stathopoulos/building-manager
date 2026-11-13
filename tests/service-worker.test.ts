@@ -18,6 +18,12 @@ describe('PWA freshness and scoped caches',()=>{
   w.handlers.fetch({request:{url:w.owned.url,method:'GET',cache:'no-store'},respondWith:(p:any)=>response=p});
   expect(await (await response).text()).toBe('latest');expect(w.caches.match).not.toHaveBeenCalled();
  });
+ it('fetches the manifest from the network even when an older copy is cached',async()=>{
+  const w=worker();let response:any;
+  w.handlers.fetch({request:{url:w.owned.url+'manifest.webmanifest',method:'GET'},respondWith:(p:any)=>response=p});
+  expect(await (await response).text()).toBe('latest');expect(w.caches.match).not.toHaveBeenCalled();
+  expect(w.fetch).toHaveBeenCalledWith(expect.objectContaining({url:w.owned.url+'manifest.webmanifest'}),{cache:'no-store'});
+ });
  it('leaves API and other apps alone',()=>{
   const w=worker(),respondWith=vi.fn();
   for(const url of ['https://example.com/api/overview','https://example.com/another-app/','https://api.example.com/api/overview'])w.handlers.fetch({request:{url,method:'GET'},respondWith});

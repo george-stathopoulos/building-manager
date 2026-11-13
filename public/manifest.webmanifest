@@ -1,8 +1,9 @@
 {
-  "name": "Π Σάμου 4",
-  "short_name": "Σάμου 4",
+  "name": "Διαχείριση Πολυκατοικίας",
+  "short_name": "Πολυκατοικία",
   "description": "Η πολυκατοικία μας · Σάμου 4",
   "lang": "el",
+  "id": "/building-manager/",
   "start_url": "/building-manager/",
   "scope": "/building-manager/",
   "display": "standalone",
